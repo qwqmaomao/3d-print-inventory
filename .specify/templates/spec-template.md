@@ -77,6 +77,9 @@
 
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
+- Which existing inventory, import, image, backup, queue, quote, duplicate
+  detection, label, or scan workflows could regress?
+- What happens with old LocalStorage/IndexedDB data created by earlier versions?
 
 ## Requirements *(mandatory)*
 
@@ -97,6 +100,10 @@
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-XXX**: System MUST preserve existing working behavior unless this spec
+  explicitly documents and accepts a breaking change.
+- **FR-XXX**: System MUST remain usable as a static local `index.html` page
+  unless this spec explicitly documents a runtime change.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -116,6 +123,8 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-XXX**: Existing critical workflows affected by this feature pass their
+  documented regression checks.
 
 ## Assumptions
 

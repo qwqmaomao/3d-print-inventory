@@ -52,6 +52,10 @@ description: "Task list template for feature implementation"
 - [ ] T001 Create project structure per implementation plan
 - [ ] T002 Initialize [language] project with [framework] dependencies
 - [ ] T003 [P] Configure linting and formatting tools
+- [ ] TXXX Review existing app behavior touched by this feature and record the
+      regression checklist from the Constitution Check
+- [ ] TXXX Confirm any new dependency is locally vendored and documented, or
+      record that no dependency is added
 
 ---
 
@@ -157,6 +161,12 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Run `node --check app.js` for JavaScript changes
+- [ ] TXXX Verify affected existing workflows still pass, including relevant
+      import, image, backup, trash, restock, queue, quote, duplicate detection,
+      label, and scan flows
+- [ ] TXXX Update README when user-visible behavior, storage keys, or vendored
+      dependencies changed
 
 ---
 

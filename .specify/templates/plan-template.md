@@ -40,7 +40,18 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **Existing function stability**: List existing workflows touched by this
+  feature and the regression checks that will prove they still work.
+- **Spec before code**: Confirm user scenarios, edge cases, and acceptance
+  criteria are present in `spec.md` before implementation planning continues.
+- **Minimal dependencies/local-first**: State whether new dependencies are
+  introduced. If yes, justify why a local vendored module is necessary and how
+  direct `index.html` use remains supported.
+- **Data safety/backward compatibility**: Identify affected LocalStorage keys,
+  IndexedDB stores, import formats, backup formats, and migration/default rules.
+- **Incremental verification**: Define the smallest deliverable slice and the
+  validation commands or manual checks, including `node --check app.js` for
+  JavaScript changes.
 
 ## Project Structure
 
