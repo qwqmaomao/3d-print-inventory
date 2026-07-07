@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>3D 打印耗材库存 v1.7</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Filament Desk v1.7</p>
+        <h1>3D 打印耗材库存</h1>
+      </div>
+      <div class="header-actions">
+        <label class="button secondary" for="xlsxInput">导入 WPS/Excel</label>
+        <input id="xlsxInput" type="file" accept=".xlsx,.xls" hidden>
+        <label class="button secondary" for="jsonInput">恢复 JSON</label>
+        <input id="jsonInput" type="file" accept="application/json,.json" hidden>
+        <button id="exportJsonBtn" class="button secondary" type="button">导出 JSON</button>
+        <label class="button secondary" for="zipInput">恢复 ZIP</label>
+        <input id="zipInput" type="file" accept=".zip,application/zip" hidden>
+        <button id="exportZipBtn" class="button secondary" type="button">完整 ZIP 备份</button>
+        <button id="addItemBtn" class="button primary" type="button">新增耗材</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="stats-grid" aria-label="库存统计">
+        <article class="stat-card">
+          <span>总条目</span>
+          <strong id="totalItems">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>总卷数</span>
+          <strong id="totalQuantity">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>总剩余重量</span>
+          <strong id="totalRemaining">0 g</strong>
+        </article>
+        <article class="stat-card warning">
+          <span>风险提醒</span>
+          <strong id="riskCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>待打印</span>
+          <strong id="pendingQueueCount">0</strong>
+        </article>
+      </section>
+
+      <nav class="tabs" aria-label="功能区">
+        <button class="tab active" type="button" data-tab="inventory">库存</button>
+        <button class="tab" type="button" data-tab="consumption">消耗记录</button>
+        <button class="tab" type="button" data-tab="calculator">代打计算</button>
+        <button class="tab" type="button" data-tab="queue">打印队列</button>
+        <button class="tab" type="button" data-tab="scan">扫码查找</button>
+        <button class="tab" type="button" data-tab="restock">补货清单</button>
+        <button class="tab" type="button" data-tab="duplicates">重复检测</button>
+        <button class="tab" type="button" data-tab="quality">库存体检</button>
+        <button class="tab" type="button" data-tab="audit">盘点</button>
+        <button class="tab" type="button" data-tab="labels">标签</button>
+        <button class="tab" type="button" data-tab="trash">回收站</button>
+      </nav>
+
+      <section id="importPanel" class="panel import-panel hidden" aria-live="polite">
+        <div class="panel-heading">
+          <div>
+            <h2>导入预览</h2>
+            <p id="importSummary">等待解析表格</p>
+          </div>
+          <div class="panel-actions">
+            <button id="cancelImportBtn" class="button ghost" type="button">取消</button>
+            <button id="confirmImportBtn" class="button primary" type="button">确认导入</button>
+          </div>
+        </div>
+        <div class="table-wrap small">
+          <table>
+            <thead>
+              <tr>
+                <th>图片</th>
+                <th>品牌</th>
+                <th>材料</th>
+                <th>颜色</th>
+                <th>重量/卷数</th>
+                <th>位置</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody id="importPreviewBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="inventoryView" class="view active">
+        <section class="panel">
+          <div class="filters">
+            <label class="field search-field">
+              <span>搜索</span>
+              <input id="searchInput" type="search" placeholder="品牌、材料、颜色、位置、备注">
+            </label>
+            <label class="field">
+              <span>材料</span>
+              <select id="materialFilter"><option value="">全部材料</option></select>
+            </label>
+            <label class="field">
+              <span>品牌</span>
+              <select id="brandFilter"><option value="">全部品牌</option></select>
+            </label>
+            <label class="field">
+              <span>状态</span>
+              <select id="statusFilter">
+                <option value="">全部状态</option>
+                <option value="在用">在用</option>
+                <option value="未开封">未开封</option>
+                <option value="已用完">已用完</option>
+                <option value="备用">备用</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>位置</span>
+              <select id="locationFilter"><option value="">全部位置</option></select>
+            </label>
+          </div>
+          <div class="panel-actions toolbar-row">
+            <button id="exportFilteredBtn" class="button secondary" type="button">导出当前筛选 .xlsx</button>
+            <button id="batchPrintLabelsBtn" class="button secondary" type="button">批量打印标签</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th><input id="selectAllInventoryInput" type="checkbox" aria-label="全选库存"></th>
+                  <th>图片</th>
+                  <th data-sort="brand">品牌 / 名称</th>
+                  <th data-sort="material">材料</th>
+                  <th data-sort="colorName">颜色</th>
+                  <th data-sort="quantity">卷数</th>
+                  <th data-sort="remainingWeight">剩余</th>
+                  <th data-sort="unitCost">单克成本</th>
+                  <th data-sort="status">状态</th>
+                  <th data-sort="location">位置</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody"></tbody>
+            </table>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <h2>还没有耗材记录</h2>
+            <p>先新增一卷耗材，或者导入项目里的 WPS/Excel 表格。</p>
+          </div>
+        </section>
+      </section>
+
+      <section id="consumptionView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>消耗记录</h2>
+              <p>记录每次打印实际用料，保存后会扣减对应库存。</p>
+            </div>
+            <button id="addConsumptionBtn" class="button primary" type="button">新增消耗</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>项目</th>
+                  <th>耗材</th>
+                  <th>消耗</th>
+                  <th>时长</th>
+                  <th>成本</th>
+                  <th>备注</th>
+                </tr>
+              </thead>
+              <tbody id="consumptionBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="calculatorView" class="view">
+        <section class="panel calculator-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>代打成本计算</h2>
+              <p>材料成本 + 机器磨损 + 电费。</p>
+            </div>
+          </div>
+          <div class="calculator-grid">
+            <label class="field">
+              <span>耗材</span>
+              <select id="calcItemSelect"></select>
+            </label>
+            <label class="field">
+              <span>预计消耗 g</span>
+              <input id="calcGramsInput" type="number" min="0" step="1" value="100">
+            </label>
+            <label class="field">
+              <span>打印时长 小时</span>
+              <input id="calcHoursInput" type="number" min="0" step="0.1" value="2">
+            </label>
+            <label class="field">
+              <span>机器磨损 元/小时</span>
+              <input id="wearRateInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>电价 元/kWh</span>
+              <input id="electricityRateInput" type="number" min="0" step="0.01">
+            </label>
+            <label class="field">
+              <span>机器功率 W</span>
+              <input id="powerWattsInput" type="number" min="0" step="1">
+            </label>
+            <label class="field">
+              <span>人工处理费</span>
+              <input id="laborFeeInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>模型处理费</span>
+              <input id="modelFeeInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>后处理费</span>
+              <input id="postProcessFeeInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>包装费</span>
+              <input id="packagingFeeInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>失败损耗率</span>
+              <input id="failureRateInput" type="number" min="0" step="0.01">
+            </label>
+            <label class="field">
+              <span>利润倍率</span>
+              <input id="profitMultiplierInput" type="number" min="0" step="0.1">
+            </label>
+            <label class="field">
+              <span>最低起步价</span>
+              <input id="minimumPriceInput" type="number" min="0" step="0.1">
+            </label>
+          </div>
+          <div id="costBreakdown" class="cost-breakdown"></div>
+          <div class="panel-actions toolbar-row">
+            <button id="copyQuoteBtn" class="button secondary" type="button">复制报价文本</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="queueView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>打印队列</h2>
+              <p>计划任务会检查库存，标记完成后扣库存并生成消耗记录。</p>
+            </div>
+            <button id="addQueueBtn" class="button primary" type="button">新增队列</button>
+          </div>
+          <div class="filters compact-filters">
+            <label class="field">
+              <span>队列状态</span>
+              <select id="queueStatusFilter">
+                <option value="">全部状态</option>
+                <option value="待打印">待打印</option>
+                <option value="准备中">准备中</option>
+                <option value="打印中">打印中</option>
+                <option value="暂停">暂停</option>
+                <option value="已完成">已完成</option>
+                <option value="失败">失败</option>
+                <option value="取消">取消</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>任务</th>
+                  <th>耗材</th>
+                  <th>预计消耗</th>
+                  <th>预计时长</th>
+                  <th>预计成本</th>
+                  <th>状态</th>
+                  <th>提醒</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="queueBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="scanView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>扫码查找</h2>
+              <p>在当前库存网页内扫描或手动输入耗材编号，查找本地浏览器库存。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="startScanBtn" class="button primary" type="button">开始扫码</button>
+              <button id="stopScanBtn" class="button secondary" type="button">停止扫码</button>
+            </div>
+          </div>
+          <div class="scan-grid">
+            <div class="scan-camera">
+              <video id="scanVideo" playsinline muted></video>
+              <p id="scanStatus" class="form-hint">如果浏览器不支持摄像头扫码，请使用手动输入。</p>
+            </div>
+            <div class="scan-manual">
+              <label class="field">
+                <span>手动输入编号</span>
+                <input id="scanManualInput" placeholder="FIL-0015 或 index.html#filament=FIL-0015">
+              </label>
+              <button id="scanManualBtn" class="button secondary" type="button">查找耗材</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="restockView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>补货清单</h2>
+              <p>按材料阈值生成采购建议，PLA/PETG 默认 200g，TPU/PA/PC 默认 150g。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="copyRestockBtn" class="button secondary" type="button">复制文本</button>
+              <button id="exportRestockBtn" class="button secondary" type="button">导出 .xlsx</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>编号</th><th>品牌</th><th>材料</th><th>颜色</th><th>线径</th><th>剩余</th><th>卷数</th><th>阈值</th><th>建议采购</th><th>位置</th><th>备注</th></tr>
+              </thead>
+              <tbody id="restockBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="duplicatesView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>疑似重复检测</h2>
+              <p>按相似度评分、字段贡献和自然语言解释判断重复风险。</p>
+            </div>
+            <button id="scanDuplicatesBtn" class="button secondary" type="button">重新扫描</button>
+          </div>
+          <div class="filters compact-filters duplicate-filters">
+            <label class="field">
+              <span>相似度筛选</span>
+              <select id="duplicateMinScoreFilter">
+                <option value="90">只看 90 分以上</option>
+                <option value="75" selected>只看 75 分以上</option>
+                <option value="60">显示所有 60 分以上</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>忽略项</span>
+              <select id="duplicateIgnoredFilter">
+                <option value="hide" selected>隐藏已忽略项</option>
+                <option value="show">显示已忽略项</option>
+              </select>
+            </label>
+          </div>
+          <div id="duplicatesBody" class="stack-list"></div>
+        </section>
+      </section>
+
+      <section id="qualityView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>库存体检</h2>
+              <p>集中检查重复、缺字段、库存异常、缺图和干燥提醒。</p>
+            </div>
+            <div class="panel-actions">
+              <label class="inline-check"><input id="showIgnoredQualityInput" type="checkbox"> 显示已忽略</label>
+              <button id="refreshQualityBtn" class="button secondary" type="button">重新检查</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>级别</th><th>问题</th><th>耗材</th><th>说明</th><th>操作</th></tr>
+              </thead>
+              <tbody id="qualityBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="auditView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>库存盘点</h2>
+              <p>填写实际称重并保存，会更新剩余重量并生成盘点修正记录。</p>
+            </div>
+            <button id="saveAuditBtn" class="button primary" type="button">保存盘点</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>编号</th><th>耗材</th><th>系统剩余</th><th>实际称重 g</th><th>差异</th><th>备注</th></tr>
+              </thead>
+              <tbody id="auditBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="labelsView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>耗材标签</h2>
+              <p>明文信息 + 二维码标签，方便贴在料盘或干燥箱。</p>
+            </div>
+            <div class="panel-actions">
+              <label class="field compact-field">
+                <span>标签尺寸</span>
+                <select id="labelSizeSelect">
+                  <option value="small">小标签</option>
+                  <option value="medium" selected>中标签</option>
+                  <option value="large">大标签</option>
+                </select>
+              </label>
+              <label class="field compact-field">
+                <span>二维码内容</span>
+                <select id="qrModeSelect">
+                  <option value="code" selected>耗材编号</option>
+                  <option value="hash">页面链接 #filament</option>
+                </select>
+              </label>
+              <button id="printLabelsBtn" class="button secondary" type="button">打印标签</button>
+            </div>
+          </div>
+          <div id="labelsBody" class="label-grid"></div>
+        </section>
+      </section>
+
+      <section id="trashView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>回收站</h2>
+              <p>删除的耗材会先进入回收站，可恢复或永久删除。</p>
+            </div>
+            <button id="clearTrashBtn" class="button secondary" type="button">清空回收站</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>删除时间</th><th>耗材</th><th>图片</th><th>位置</th><th>备注</th><th>操作</th></tr>
+              </thead>
+              <tbody id="trashBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <datalist id="nameOptions"></datalist>
+    <datalist id="brandOptions"></datalist>
+    <datalist id="materialOptions"></datalist>
+    <datalist id="colorOptions"></datalist>
+    <datalist id="locationOptions"></datalist>
+
+    <dialog id="itemDialog" class="dialog">
+      <form id="itemForm" method="dialog">
+        <div class="dialog-heading">
+          <h2 id="itemDialogTitle">新增耗材</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input id="itemId" type="hidden">
+        <div class="form-grid">
+          <label class="field">
+            <span>名称</span>
+            <input id="nameInput" list="nameOptions" placeholder="例如 PLA 丝绸银">
+          </label>
+          <label class="field">
+            <span>品牌</span>
+            <input id="brandInput" list="brandOptions" required placeholder="厂家/品牌">
+          </label>
+          <label class="field">
+            <span>材料</span>
+            <input id="materialInput" list="materialOptions" required placeholder="PLA / PETG / TPU">
+          </label>
+          <label class="field">
+            <span>颜色</span>
+            <input id="colorNameInput" list="colorOptions" placeholder="红色 / 丝绸银">
+          </label>
+          <label class="field">
+            <span>颜色值</span>
+            <input id="colorHexInput" type="color" value="#4f7cff">
+          </label>
+          <label class="field">
+            <span>线径 mm</span>
+            <input id="diameterInput" type="number" step="0.01" min="0" value="1.75">
+          </label>
+          <label class="field">
+            <span>卷数</span>
+            <input id="quantityInput" type="number" step="1" min="1" value="1">
+          </label>
+          <label class="field">
+            <span>每卷重量 g</span>
+            <input id="spoolWeightInput" type="number" step="1" min="1" value="1000">
+          </label>
+          <label class="field">
+            <span>总容量 g</span>
+            <input id="totalWeightInput" type="number" step="1" min="0" value="1000" readonly>
+          </label>
+          <label class="field">
+            <span>剩余重量 g</span>
+            <input id="remainingWeightInput" type="number" step="1" min="0" value="1000">
+          </label>
+          <label class="field">
+            <span>购买价格</span>
+            <input id="purchasePriceInput" type="number" step="0.01" min="0" placeholder="59.90">
+          </label>
+          <label class="field">
+            <span>单克成本</span>
+            <input id="unitCostInput" type="number" step="0.0001" min="0" readonly>
+          </label>
+          <label class="field">
+            <span>状态</span>
+            <select id="itemStatusInput">
+              <option value="在用">在用</option>
+              <option value="未开封">未开封</option>
+              <option value="备用">备用</option>
+              <option value="已用完">已用完</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>位置</span>
+            <input id="locationInput" list="locationOptions" placeholder="位置序列号/干燥箱">
+          </label>
+          <label class="field">
+            <span>购买日期</span>
+            <input id="purchaseDateInput" type="date">
+          </label>
+          <label class="field">
+            <span>平台/店铺</span>
+            <input id="shopInput" placeholder="淘宝 / 京东 / 店铺">
+          </label>
+          <label class="field">
+            <span>批次/编号</span>
+            <input id="batchInput" placeholder="序列号 / LOT">
+          </label>
+          <label class="field">
+            <span>开封状态</span>
+            <select id="openedInput">
+              <option value="">未记录</option>
+              <option value="yes">已开封</option>
+              <option value="no">未开封</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>开封日期</span>
+            <input id="openedAtInput" type="date">
+          </label>
+          <label class="field">
+            <span>上次干燥日期</span>
+            <input id="lastDryAtInput" type="date">
+          </label>
+          <label class="field">
+            <span>干燥温度 °C</span>
+            <input id="dryTempInput" type="number" min="0" step="1">
+          </label>
+          <label class="field">
+            <span>干燥时长 h</span>
+            <input id="dryHoursInput" type="number" min="0" step="0.1">
+          </label>
+          <label class="field">
+            <span>受潮标记</span>
+            <select id="moistureInput">
+              <option value="">正常</option>
+              <option value="yes">疑似受潮</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>干燥状态</span>
+            <select id="dryStatusInput">
+              <option value="正常">正常</option>
+              <option value="建议干燥">建议干燥</option>
+              <option value="已干燥">已干燥</option>
+            </select>
+          </label>
+          <label class="field full">
+            <span>备注</span>
+            <textarea id="notesInput" rows="3" placeholder="打印参数、干燥要求、特殊情况"></textarea>
+          </label>
+          <div class="field full image-field">
+            <span>图片</span>
+            <div class="image-editor">
+              <div id="itemImagePreview" class="image-preview thumb placeholder">无图</div>
+              <div class="image-editor-actions">
+                <label class="button secondary" for="itemImageInput">选择图片</label>
+                <input id="itemImageInput" type="file" accept="image/*" hidden>
+                <button id="clearItemImageBtn" class="button ghost" type="button">清除图片</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-close-dialog>取消</button>
+          <button class="button primary" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="scanActionDialog" class="dialog">
+      <form id="scanActionForm" method="dialog">
+        <div class="dialog-heading">
+          <h2 id="scanActionTitle">扫码操作</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input id="scanActionItemId" type="hidden">
+        <p id="scanActionSummary" class="form-hint"></p>
+        <div class="quick-actions">
+          <button class="button secondary" type="button" data-scan-consume="10">消耗 10g</button>
+          <button class="button secondary" type="button" data-scan-consume="50">消耗 50g</button>
+          <button class="button secondary" type="button" data-scan-consume="100">消耗 100g</button>
+        </div>
+        <div class="form-grid">
+          <label class="field">
+            <span>自定义扣减 g</span>
+            <input id="scanCustomConsumeInput" type="number" min="0" step="1">
+          </label>
+          <button id="scanCustomConsumeBtn" class="button secondary align-end" type="button">扣减</button>
+          <label class="field">
+            <span>更新位置</span>
+            <input id="scanLocationInput" placeholder="新位置">
+          </label>
+          <button id="scanUpdateLocationBtn" class="button secondary align-end" type="button">保存位置</button>
+        </div>
+        <div class="dialog-actions">
+          <button id="scanViewDetailBtn" class="button secondary" type="button">查看详情</button>
+          <button id="scanMarkOpenedBtn" class="button secondary" type="button">标记已开封</button>
+          <button id="scanAuditBtn" class="button secondary" type="button">进入盘点称重</button>
+          <button id="scanAddQueueBtn" class="button secondary" type="button">加入打印队列</button>
+          <button class="button ghost" type="button" data-close-dialog>关闭</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="consumptionDialog" class="dialog">
+      <form id="consumptionForm" method="dialog">
+        <div class="dialog-heading">
+          <h2>新增消耗记录</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="field">
+            <span>项目名称</span>
+            <input id="consumeProjectInput" required placeholder="打印项目">
+          </label>
+          <label class="field">
+            <span>耗材</span>
+            <select id="consumeItemSelect" required></select>
+          </label>
+          <label class="field">
+            <span>消耗 g</span>
+            <input id="consumeGramsInput" type="number" min="0" step="1" required>
+          </label>
+          <label class="field">
+            <span>打印时长 小时</span>
+            <input id="consumeHoursInput" type="number" min="0" step="0.1">
+          </label>
+          <label class="field full">
+            <span>备注</span>
+            <textarea id="consumeNotesInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-close-dialog>取消</button>
+          <button class="button primary" type="submit">保存并扣减</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="queueDialog" class="dialog">
+      <form id="queueForm" method="dialog">
+        <div class="dialog-heading">
+          <h2 id="queueDialogTitle">新增队列任务</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input id="queueId" type="hidden">
+        <div class="form-grid">
+          <label class="field">
+            <span>任务名称</span>
+            <input id="queueNameInput" required placeholder="模型/客户/订单">
+          </label>
+          <label class="field">
+            <span>预计时长 小时</span>
+            <input id="queueHoursInput" type="number" min="0" step="0.1">
+          </label>
+          <label class="field">
+            <span>状态</span>
+            <select id="queueStatusInput">
+              <option value="待打印">待打印</option>
+              <option value="准备中">准备中</option>
+              <option value="打印中">打印中</option>
+              <option value="暂停">暂停</option>
+              <option value="已完成">已完成</option>
+              <option value="失败">失败</option>
+              <option value="取消">取消</option>
+            </select>
+          </label>
+          <label class="field full">
+            <span>备注</span>
+            <textarea id="queueNotesInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="queue-materials">
+          <div class="subsection-heading">
+            <h3>耗材消耗</h3>
+            <button id="addQueueMaterialBtn" class="button secondary" type="button">添加耗材</button>
+          </div>
+          <div id="queueMaterialsBody" class="queue-material-list"></div>
+        </div>
+        <p id="queueStockHint" class="form-hint"></p>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-close-dialog>取消</button>
+          <button class="button primary" type="submit">保存任务</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="mergeDialog" class="dialog">
+      <form id="mergeForm" method="dialog">
+        <div class="dialog-heading">
+          <h2 id="mergeDialogTitle">合并预览</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="关闭">×</button>
+        </div>
+        <input id="mergeSourceIds" type="hidden">
+        <p id="mergeSummary" class="form-hint"></p>
+        <div class="table-wrap small">
+          <table>
+            <thead>
+              <tr><th>字段</th><th>记录 A</th><th>记录 B</th><th>合并后</th></tr>
+            </thead>
+            <tbody id="mergePreviewBody"></tbody>
+          </table>
+        </div>
+        <label class="field merge-image-field">
+          <span>图片保留策略</span>
+          <select id="mergeImageChoice">
+            <option value="a">保留记录 A 图片</option>
+            <option value="b">保留记录 B 图片</option>
+            <option value="">清除图片</option>
+          </select>
+        </label>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-close-dialog>取消</button>
+          <button class="button primary" type="submit">确认合并</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="vendor/jszip.min.js"></script>
+    <script src="vendor/qrcode.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
