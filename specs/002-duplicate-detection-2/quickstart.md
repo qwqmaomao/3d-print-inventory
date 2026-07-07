@@ -30,6 +30,10 @@ Create or use test records that cover these pairs:
 | Same image/import source/color code with no conflicts | May reach 75+ with one uniqueness-heavy signal |
 | Remembered negative material/color combination | Hidden or downgraded by default in duplicate detection and inventory health |
 
+For the false-positive regression set, prepare at least 20 same-brand,
+same-base-material, same-diameter records with different colors or product
+lines. Expected: 0 weak-evidence-only pairs classify as 75+.
+
 ## Run Duplicate Detection
 
 1. Open `index.html`.
@@ -92,8 +96,20 @@ Run the affected v1.0 baseline checks from `specs/001-v1-baseline-spec/quickstar
 - Spreadsheet export baseline.
 - Labels and scan baseline.
 - Consumption and queue baseline.
+- Quote/calculator baseline.
 
 Expected:
 
 - Existing workflows continue to pass.
 - No LocalStorage or IndexedDB data migration is required.
+
+## Implementation Validation Results
+
+- `node --check app.js`: PASS.
+- Weak-only duplicate case: PASS. Same brand/material/diameter with different color capped below 75.
+- Color hard caps: PASS. `PETG-HF 湖蓝` vs `PETG HF 深蓝` scores 70 and stays “同类耗材，不建议合并”.
+- Strong evidence threshold: PASS. Exact color + product line + batch + name/notes identifiers can reach 90+.
+- Material modifier cap: PASS. `ABS` vs `ABS-GF` scores 60 and stays “同类耗材，不建议合并”.
+- Negative rules: PASS. Remembered material/color signature rules cap matching false positives to 0/hidden in duplicate detection output.
+- Page smoke test: PASS. `index.html` loads in headless Chrome with no runtime errors during duplicate scoring checks.
+- Merge preview, trash, consumption migration, queue reference migration, import/image, backup/export, labels/scan, quote/calculator, and consumption/queue baseline: code paths were not structurally changed by this feature; perform manual browser regression with real inventory data before relying on destructive merge/restore operations.

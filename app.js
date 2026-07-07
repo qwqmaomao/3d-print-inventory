@@ -1275,9 +1275,15 @@ function renderDuplicates() {
 
 function renderDuplicateResult(result, index) {
   const [a, b] = result.items;
-  const mergeDiscouraged = result.mergeAdvice === "不建议合并";
-  const mergeButtonText = mergeDiscouraged ? "不建议合并" : "合并预览";
+  const mergeDiscouraged = result.score < 75 || result.mergeAdvice.includes("不建议");
+  const mergeButtonText = getMergeEntryLabel(result);
   const mergeButtonClass = mergeDiscouraged ? "small-button danger weak-merge" : "small-button";
+  const strongEvidence = result.strongEvidence?.length
+    ? `<div class="evidence-list"><strong>强证据：</strong>${result.strongEvidence.map((entry) => `<span class="tag info">${escapeHtml(entry.label)}</span>`).join("")}</div>`
+    : "";
+  const whyNotMerge = result.explanation?.whyNotMerge
+    ? `<p class="explanation caution"><strong>为什么不建议合并：</strong>${escapeHtml(result.explanation.whyNotMerge)}</p>`
+    : "";
   return `
     <article class="stack-card duplicate-card ${result.ignored ? "ignored" : ""}">
       <div class="stack-card-head">
@@ -1296,7 +1302,9 @@ function renderDuplicateResult(result, index) {
         ${result.capReasons?.length ? `<span class="tag warn">${escapeHtml(result.capReasons.join("；"))}</span>` : ""}
         ${result.ignored ? `<span class="tag warn">已忽略</span>` : ""}
       </div>
-      <p class="explanation">${escapeHtml(result.explanation)}</p>
+      <p class="explanation"><strong>为什么相似：</strong>${escapeHtml(result.explanation?.whySimilar || result.explanation || "")}</p>
+      ${whyNotMerge}
+      ${strongEvidence}
       <div class="table-wrap small comparison-wrap">
         <table class="comparison-table">
           <thead><tr><th>字段</th><th>记录 A</th><th>记录 B</th><th>判断</th><th>贡献</th><th>冲突提示</th></tr></thead>
@@ -1341,50 +1349,150 @@ function findDuplicateResults(options = {}) {
 }
 
 function scoreDuplicatePair(a, b) {
-  const materialA = parseMaterialSignature(a.material);
-  const materialB = parseMaterialSignature(b.material);
-  const colorA = parseColorSignature(a.colorName);
-  const colorB = parseColorSignature(b.colorName);
-  const negative = getNegativeRuleForPair(materialA, materialB, colorA, colorB);
-  const comparisons = [
-    compareScoredField("品牌", a.brand, b.brand, 20, "brand"),
-    compareMaterialField(materialA, materialB),
-    compareColorField(colorA, colorB),
-    compareDiameter(a.diameter, b.diameter),
-    compareKeywordField("名称/备注关键词", `${a.name} ${a.notes}`, `${b.name} ${b.notes}`, 10),
-    compareUnscoredField("位置", a.location, b.location),
-    compareUnscoredField("剩余重量", `${formatNumber(a.remainingWeight)}g`, `${formatNumber(b.remainingWeight)}g`)
-  ];
-  const material = comparisons.find((row) => row.field === "材料");
-  const diameter = comparisons.find((row) => row.field === "线径");
-  const color = comparisons.find((row) => row.field === "颜色");
-  const blockedReason = material.blockedReason || diameter.blockedReason || color.blockedReason || negative.blockedReason || "";
-  const rawScore = Math.min(100, Math.round(comparisons.reduce((sum, row) => sum + numberOrZero(row.points), 0)));
-  const caps = [material.hardCap, color.hardCap, negative.hardCap].filter(Number.isFinite);
-  const hardCap = caps.length ? Math.min(...caps) : 100;
-  const score = Math.min(rawScore, hardCap);
-  const capReasons = [material.conflictHint, color.conflictHint, negative.reason].filter(Boolean);
-  const reasons = comparisons.filter((row) => row.participates && row.points > 0).map((row) => `${row.field}${row.verdict}`);
+  const candidate = buildDuplicateCandidatePair(a, b);
+  const weakEvidence = collectWeakEvidence(candidate);
+  const strongEvidence = collectStrongEvidence(candidate);
+  const comparisons = buildDuplicateComparisons(candidate, weakEvidence, strongEvidence);
+  const caps = collectConflictCaps(candidate, weakEvidence, strongEvidence);
+  const blockedReason = candidate.material.blockedReason || candidate.diameter.blockedReason || "";
+  const rawScore = Math.min(100, Math.round([...weakEvidence, ...strongEvidence].reduce((sum, row) => sum + numberOrZero(row.points), 0)));
+  const scoreInfo = applyDuplicateHardCaps(rawScore, caps, weakEvidence, strongEvidence);
+  const reasons = [...weakEvidence, ...strongEvidence].filter((entry) => entry.points > 0).map((entry) => entry.label);
   return {
     id: ignoreKeyForItems([a, b]),
     ids: [a.id, b.id],
     items: [a, b],
-    score,
+    score: scoreInfo.score,
     rawScore,
-    hardCap,
-    level: duplicateLevel(score),
-    mergeAdvice: duplicateMergeAdvice(score, capReasons),
+    hardCap: scoreInfo.hardCap,
+    level: duplicateLevel(scoreInfo.score),
+    mergeAdvice: duplicateMergeAdvice(scoreInfo.score, scoreInfo.capReasons),
     reasons,
-    explanation: duplicateExplanation(a, b, score, comparisons, capReasons),
+    explanation: buildDuplicateExplanations(a, b, scoreInfo.score, comparisons, scoreInfo.capReasons, weakEvidence, strongEvidence),
     comparisons,
-    capReasons,
+    capReasons: scoreInfo.capReasons,
+    weakEvidence,
+    strongEvidence,
     blocked: Boolean(blockedReason),
     blockedReason,
     ignored: false
   };
 }
 
-function compareMaterialField(a, b) {
+function buildDuplicateCandidatePair(a, b) {
+  const materialA = parseMaterialSignature(a.material, a);
+  const materialB = parseMaterialSignature(b.material, b);
+  const colorA = parseColorSignature(a.colorName, a.colorHex);
+  const colorB = parseColorSignature(b.colorName, b.colorHex);
+  const productLineA = parseProductLineSignature(a);
+  const productLineB = parseProductLineSignature(b);
+  const brand = compareWeakField("品牌", a.brand, b.brand, 10, "brand");
+  const material = compareMaterialField(materialA, materialB, productLineA, productLineB);
+  const color = compareColorField(colorA, colorB);
+  const diameter = compareDiameter(a.diameter, b.diameter);
+  const negative = getNegativeRuleForPair(materialA, materialB, colorA, colorB, a, b);
+  return { a, b, materialA, materialB, colorA, colorB, productLineA, productLineB, brand, material, color, diameter, negative };
+}
+
+function collectWeakEvidence(candidate) {
+  return [candidate.brand, candidate.material, candidate.diameter]
+    .filter((row) => row.participates && row.points > 0)
+    .map((row) => evidence("weak", row.field, `${row.field}${row.verdict}`, row.points, row.field));
+}
+
+function collectStrongEvidence(candidate) {
+  const { a, b, color, colorA, colorB, productLineA, productLineB } = candidate;
+  const entries = [];
+  if (color.points >= 25 && color.verdict !== "缺少字段") {
+    const unique = Boolean(colorA.colorCode && colorA.colorCode === colorB.colorCode);
+    entries.push(evidence(unique ? "uniqueness-heavy" : "strong", "颜色", unique ? `色号一致：${colorA.colorCode}` : "颜色完全一致", 25, unique ? "color-code" : "color-exact"));
+  }
+  if (productLineA.lineKey && productLineA.lineKey === productLineB.lineKey) {
+    entries.push(evidence("strong", "产品线", `产品线一致：${productLineA.normalizedLabel}`, 15, "product-line"));
+  }
+  const batch = compareStrongText("批次", a.batch, b.batch, 12, "batch");
+  if (batch) entries.push(batch);
+  const shop = compareStrongText("店铺", a.shop, b.shop, 8, "shop");
+  if (shop) entries.push(shop);
+  const purchase = comparePurchaseDate(a.purchaseDate, b.purchaseDate);
+  if (purchase) entries.push(purchase);
+  const position = comparePositionSequence(a.location, b.location);
+  if (position) entries.push(position);
+  if (a.imageKey && b.imageKey && a.imageKey === b.imageKey) {
+    entries.push(evidence("uniqueness-heavy", "图片", "图片来源一致", 20, "image"));
+  }
+  const importSource = compareImportSource(a, b);
+  if (importSource) entries.push(importSource);
+  const keyword = compareKeywordEvidence(`${a.name} ${a.notes}`, `${b.name} ${b.notes}`);
+  if (keyword) entries.push(keyword);
+  return dedupeEvidence(entries);
+}
+
+function buildDuplicateComparisons(candidate, weakEvidence, strongEvidence) {
+  const strongRows = [
+    strongComparisonRow("产品线", candidate.productLineA.normalizedLabel, candidate.productLineB.normalizedLabel, strongEvidence, "product-line"),
+    strongComparisonRow("批次", candidate.a.batch, candidate.b.batch, strongEvidence, "batch"),
+    strongComparisonRow("店铺", candidate.a.shop, candidate.b.shop, strongEvidence, "shop"),
+    strongComparisonRow("购买日期", candidate.a.purchaseDate, candidate.b.purchaseDate, strongEvidence, "purchase-date"),
+    strongComparisonRow("图片/导入来源", candidate.a.imageKey || "", candidate.b.imageKey || "", strongEvidence, "image")
+  ].filter(Boolean);
+  return [
+    candidate.brand,
+    candidate.material,
+    candidate.color,
+    candidate.diameter,
+    ...strongRows,
+    compareKeywordField("名称/备注关键词", `${candidate.a.name} ${candidate.a.notes}`, `${candidate.b.name} ${candidate.b.notes}`, 10),
+    compareUnscoredField("位置", candidate.a.location, candidate.b.location),
+    compareUnscoredField("剩余重量", `${formatNumber(candidate.a.remainingWeight)}g`, `${formatNumber(candidate.b.remainingWeight)}g`)
+  ];
+}
+
+function collectConflictCaps(candidate, weakEvidence, strongEvidence) {
+  const caps = [];
+  const addCap = (value, reason, type = "conflict") => {
+    if (Number.isFinite(value)) caps.push({ value, reason, type });
+  };
+  if (candidate.negative.hardCap === 0) addCap(0, candidate.negative.reason, "negative");
+  if (candidate.color.hardCap) addCap(candidate.color.hardCap, candidate.color.conflictHint, "conflict");
+  if (candidate.material.hardCap) addCap(candidate.material.hardCap, candidate.material.conflictHint, "conflict");
+  const hasUniqueness = strongEvidence.some((entry) => entry.category === "uniqueness-heavy");
+  const onlyWeak = weakEvidence.length > 0 && strongEvidence.length === 0;
+  if (onlyWeak) addCap(55, "基础字段常见，只作为弱证据，触发分数上限 55；不建议合并", "weak-only");
+  if (!hasStrongEvidenceThreshold(strongEvidence) && !onlyWeak) addCap(74, "强证据不足，不能进入疑似重复等级", "threshold");
+  if (hasUniqueness) return caps.filter((cap) => cap.type !== "weak-only");
+  return caps;
+}
+
+function applyDuplicateHardCaps(rawScore, caps) {
+  const hardCap = caps.length ? Math.min(...caps.map((cap) => cap.value)) : 100;
+  return {
+    score: Math.max(0, Math.min(rawScore, hardCap)),
+    hardCap,
+    capReasons: caps.map((cap) => cap.reason).filter(Boolean)
+  };
+}
+
+function evidence(category, field, label, points, independentKey) {
+  return { category, field, label, points, independentKey };
+}
+
+function dedupeEvidence(entries) {
+  const seen = new Set();
+  return entries.filter((entry) => {
+    if (!entry.independentKey || seen.has(entry.independentKey)) return false;
+    seen.add(entry.independentKey);
+    return true;
+  });
+}
+
+function hasStrongEvidenceThreshold(entries) {
+  const independentStrong = new Set(entries.filter((entry) => entry.category === "strong").map((entry) => entry.independentKey));
+  const hasUniqueness = entries.some((entry) => entry.category === "uniqueness-heavy");
+  return independentStrong.size >= 2 || hasUniqueness;
+}
+
+function compareMaterialField(a, b, productLineA = {}, productLineB = {}) {
   if (!a.baseMaterial || !b.baseMaterial) return comparison("材料", a.raw, b.raw, "缺少字段", 0, 30, true);
   if (a.baseMaterial !== b.baseMaterial) {
     const row = comparison("材料", a.raw, b.raw, "基础材料不同", 0, 30, true);
@@ -1392,7 +1500,8 @@ function compareMaterialField(a, b) {
     row.conflictHint = "基础材料不同，不进入重复候选";
     return row;
   }
-  if (a.modifierKey !== b.modifierKey) {
+  const lineConflict = productLineA.lineKey && productLineB.lineKey && productLineA.lineKey !== productLineB.lineKey;
+  if (a.modifierKey !== b.modifierKey || lineConflict) {
     const cap = materialModifierCap(a, b);
     const row = comparison("材料", a.raw, b.raw, "同基材不同型号", Math.min(20, cap), 30, true);
     row.hardCap = cap;
@@ -1407,18 +1516,24 @@ function compareColorField(a, b) {
   if (!a.colorFamily || !b.colorFamily) return comparison("颜色", a.raw, b.raw, "缺少字段", 0, 25, true);
   if (a.colorFamily !== b.colorFamily) {
     const row = comparison("颜色", a.raw, b.raw, "颜色不同", 0, 25, true);
-    row.blockedReason = "颜色不同";
-    row.conflictHint = "颜色大类不同，不进入重复候选";
+    row.hardCap = 50;
+    row.conflictHint = "颜色大类不同，触发分数上限 50；不建议合并";
     return row;
   }
-  if (a.shadeKey !== b.shadeKey) {
+  if (a.shadeKey !== b.shadeKey || (a.colorCode && b.colorCode && a.colorCode !== b.colorCode)) {
     const row = comparison("颜色", a.raw, b.raw, "同色系不同色号", 15, 25, true);
-    row.hardCap = 75;
-    row.conflictHint = "同色系不同色号，触发分数上限 75；不建议合并";
+    row.hardCap = 70;
+    row.conflictHint = "同色系不同色号/效果，触发分数上限 70；不建议合并";
     return row;
   }
   const sameRaw = cleanText(a.raw).toLowerCase() === cleanText(b.raw).toLowerCase();
   return comparison("颜色", a.raw, b.raw, sameRaw ? "完全相同" : "标准化相同", 25, 25, true);
+}
+
+function compareWeakField(field, a, b, maxPoints, type) {
+  const row = compareScoredField(field, a, b, maxPoints, type);
+  row.evidenceType = "weak";
+  return row;
 }
 
 function compareScoredField(field, a, b, maxPoints, type) {
@@ -1457,6 +1572,59 @@ function compareKeywordField(field, a, b, maxPoints) {
   return comparison(field, a, b, "不相同", 0, maxPoints, true);
 }
 
+function compareStrongText(field, a, b, maxPoints, independentKey) {
+  const rawA = cleanText(a);
+  const rawB = cleanText(b);
+  if (!rawA || !rawB) return null;
+  const normA = normalizeToken(rawA);
+  const normB = normalizeToken(rawB);
+  if (normA && normA === normB) return evidence("strong", field, `${field}一致`, maxPoints, independentKey);
+  if (textSimilarity(normA, normB) >= 0.82) return evidence("strong", field, `${field}接近`, Math.max(4, Math.round(maxPoints * 0.7)), independentKey);
+  return null;
+}
+
+function comparePurchaseDate(a, b) {
+  const left = Date.parse(cleanText(a));
+  const right = Date.parse(cleanText(b));
+  if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
+  const days = Math.abs(left - right) / 86400000;
+  if (days <= 7) return evidence("strong", "购买日期", days === 0 ? "购买日期一致" : "购买日期接近", days === 0 ? 10 : 6, "purchase-date");
+  return null;
+}
+
+function comparePositionSequence(a, b) {
+  const rawA = cleanText(a);
+  const rawB = cleanText(b);
+  if (!rawA || !rawB) return null;
+  if (rawA === rawB) return evidence("strong", "位置", "位置序列一致", 8, "position");
+  const numsA = rawA.match(/\d+/g) || [];
+  const numsB = rawB.match(/\d+/g) || [];
+  if (numsA.length && numsA.join("-") === numsB.join("-")) return evidence("strong", "位置", "位置序列号接近", 5, "position");
+  return null;
+}
+
+function compareImportSource(a, b) {
+  const sourceA = cleanText(a.importSource || a.sourceFile || a.sourceSheet);
+  const sourceB = cleanText(b.importSource || b.sourceFile || b.sourceSheet);
+  if (!sourceA || !sourceB || sourceA !== sourceB) return null;
+  return evidence("uniqueness-heavy", "导入来源", "导入来源一致", 16, "import-source");
+}
+
+function compareKeywordEvidence(a, b) {
+  const tokensA = keywordTokens(a);
+  const tokensB = keywordTokens(b);
+  const overlap = tokensA.filter((token) => tokensB.includes(token));
+  const meaningful = overlap.filter((token) => token.length >= 3 || /[a-z]+\d+/i.test(token));
+  if (!meaningful.length) return null;
+  return evidence("strong", "名称/备注", `名称/备注关键标识一致：${meaningful.slice(0, 3).join("、")}`, Math.min(10, meaningful.length * 4), "name-notes");
+}
+
+function strongComparisonRow(field, a, b, strongEvidence, key) {
+  const hit = strongEvidence.find((entry) => entry.independentKey === key || entry.field === field);
+  if (!cleanText(a) && !cleanText(b) && !hit) return null;
+  return comparison(field, a, b, hit ? "强证据" : "未命中", hit ? hit.points : 0, hit ? hit.points : 0, Boolean(hit));
+}
+
 function compareUnscoredField(field, a, b) {
   return comparison(field, a, b, "不参与评分", 0, 0, false);
 }
@@ -1467,33 +1635,50 @@ function comparison(field, a, b, verdict, points, maxPoints, participates) {
 
 function duplicateLevel(score) {
   if (score >= 90) return "几乎确定重复";
-  if (score >= 75) return "高度疑似重复";
-  if (score >= 60) return "同类耗材";
+  if (score >= 75) return "疑似重复";
+  if (score >= 60) return "同类耗材，不建议合并";
   return "低相似度";
 }
 
 function duplicateMergeAdvice(score, capReasons = []) {
   if (capReasons.some((reason) => reason.includes("不建议合并"))) return "不建议合并";
-  if (score >= 90 && !capReasons.length) return "可以建议合并";
-  if (score >= 75) return "需要人工确认";
+  if (score >= 90 && !capReasons.length) return "建议合并预览";
+  if (score >= 75) return "人工确认后合并预览";
   if (score >= 60) return "不建议合并";
   return "不显示";
 }
 
-function duplicateExplanation(a, b, score, comparisons, capReasons = []) {
+function getMergeEntryLabel(result) {
+  if (result.score >= 90 && !result.capReasons?.some((reason) => reason.includes("不建议合并"))) return "建议合并预览";
+  if (result.score >= 75) return "人工确认后合并预览";
+  if (result.score >= 60) return "不建议合并，仍要查看预览";
+  return "合并预览";
+}
+
+function buildDuplicateExplanations(a, b, score, comparisons, capReasons = [], weakEvidence = [], strongEvidence = []) {
   const material = comparisons.find((row) => row.field === "材料");
   const color = comparisons.find((row) => row.field === "颜色");
   const brand = comparisons.find((row) => row.field === "品牌");
   const diameter = comparisons.find((row) => row.field === "线径");
-  const prefix = score >= 90 ? "这两条记录几乎确定重复" : score >= 75 ? "这两条记录高度疑似重复" : "这两条记录属于同类耗材";
+  const prefix = score >= 90 ? "这两条记录几乎确定重复" : score >= 75 ? "这两条记录疑似重复" : "这两条记录属于同类耗材";
   const details = [
     material?.points ? `材料判断为${material.verdict}` : "材料不完全一致",
     color?.points ? `颜色判断为${color.verdict}` : "颜色不完全一致",
     diameter?.points ? `线径同为 ${formatNumber(a.diameter)}mm` : "线径不同",
     brand?.points ? `品牌 ${brand.a} 和 ${brand.b} 被视为${brand.verdict}` : "品牌不同"
   ];
-  const capText = capReasons.length ? `触发限制：${capReasons.join("；")}。` : "";
-  return `${prefix}，因为${details.join("，")}。${capText}${score < 75 ? "这是同类耗材，不建议合并。" : "请结合实物标签人工确认。"}`;
+  const strongText = strongEvidence.length ? `强证据包括：${strongEvidence.map((entry) => entry.label).join("、")}。` : "没有足够独立强证据。";
+  const whySimilar = `${prefix}，因为${details.join("，")}。${strongText}`;
+  const whyNotMerge = capReasons.length
+    ? `触发限制：${capReasons.join("；")}。请结合实物标签人工确认。`
+    : score < 75
+      ? "当前主要是同类属性相似，不是同一记录的强证据，不建议合并。"
+      : "";
+  return { whySimilar, whyNotMerge };
+}
+
+function duplicateExplanation(a, b, score, comparisons, capReasons = []) {
+  return buildDuplicateExplanations(a, b, score, comparisons, capReasons).whySimilar;
 }
 
 function scoreClass(score) {
@@ -1521,13 +1706,11 @@ function rememberNegativeDuplicate(id) {
   const result = findDuplicateResults({ minScore: 60, showIgnored: true }).find((entry) => entry.id === id);
   if (!result) return;
   const rules = negativeRulesForResult(result);
-  if (!rules.length) {
-    state.duplicateIgnores.push(id);
-  } else {
-    state.duplicateNegativeRules = [...new Set([...state.duplicateNegativeRules, ...rules])];
-  }
+  state.duplicateIgnores = [...new Set([...state.duplicateIgnores, id])];
+  if (rules.length) state.duplicateNegativeRules = [...new Set([...state.duplicateNegativeRules, ...rules])];
   persistAll();
   renderDuplicates();
+  renderQualityTable();
   showToast("已记住这个非重复判断。");
 }
 
@@ -1538,6 +1721,7 @@ function negativeRulesForResult(result) {
   const colorA = parseColorSignature(a.colorName);
   const colorB = parseColorSignature(b.colorName);
   const rules = [];
+  rules.push(`pair:${result.id}`);
   if (materialA.baseMaterial && materialA.baseMaterial === materialB.baseMaterial && materialA.modifierKey !== materialB.modifierKey) {
     rules.push(`material:${pairKey(materialA.normalizedLabel, materialB.normalizedLabel)}`);
   }
@@ -2602,9 +2786,39 @@ function parseMaterialSignature(value) {
   };
 }
 
+function parseProductLineSignature(itemOrText) {
+  const text = typeof itemOrText === "string"
+    ? itemOrText
+    : `${itemOrText?.material || ""} ${itemOrText?.name || ""} ${itemOrText?.notes || ""}`;
+  const compact = cleanText(text).toLowerCase().replace(/[＋+]/g, "+").replace(/[\s_-]+/g, "");
+  const aliases = [
+    ["Basic", ["basic", "基础"]],
+    ["Matte", ["matte", "哑光"]],
+    ["Silk", ["silk", "丝绸", "丝光"]],
+    ["HF", ["hf", "highflow", "高速"]],
+    ["GF", ["gf", "glassfiber", "玻纤", "玻璃纤维"]],
+    ["CF", ["cf", "carbonfiber", "碳纤"]],
+    ["Support", ["support", "支撑"]],
+    ["Wood", ["wood", "木质", "木"]],
+    ["Plus", ["plus", "+", "增强"]],
+    ["Pro", ["pro"]]
+  ];
+  const lines = aliases
+    .filter(([, list]) => list.some((alias) => compact.includes(alias.replace(/[\s_-]+/g, ""))))
+    .map(([name]) => name);
+  const unique = [...new Set(lines)].sort();
+  return {
+    lineKey: unique.join("+"),
+    lines: unique,
+    normalizedLabel: unique.join("+")
+  };
+}
+
 function parseColorSignature(value) {
   const raw = cleanText(value);
   const text = raw.toLowerCase().replace(/\s+/g, "");
+  const code = cleanText(arguments.length > 1 ? arguments[1] : "").replace(/^#/, "").toLowerCase();
+  const inlineCode = raw.match(/(?:色号|code|#)?\s*([a-z]{0,3}\d{2,}|#[0-9a-fA-F]{3,6})/i)?.[1] || "";
   const familyMap = [
     ["黑", ["黑", "black"]],
     ["白", ["白", "white"]],
@@ -2634,8 +2848,9 @@ function parseColorSignature(value) {
     raw,
     colorFamily,
     colorShade: [...new Set(shades)].sort(),
+    colorCode: code || inlineCode.toLowerCase().replace(/^#/, ""),
     shadeKey,
-    normalizedLabel: [shadeKey, colorFamily].filter(Boolean).join("") || raw
+    normalizedLabel: [shadeKey, colorFamily, code || inlineCode].filter(Boolean).join("") || raw
   };
 }
 
@@ -2645,13 +2860,17 @@ function materialModifierCap(a, b) {
   return 60;
 }
 
-function getNegativeRuleForPair(materialA, materialB, colorA, colorB) {
+function getNegativeRuleForPair(materialA, materialB, colorA, colorB, a = null, b = null) {
+  const pairRule = a && b ? `pair:${ignoreKeyForItems([a, b])}` : "";
   const materialRule = materialA.baseMaterial && materialA.baseMaterial === materialB.baseMaterial && materialA.modifierKey !== materialB.modifierKey
     ? `material:${pairKey(materialA.normalizedLabel, materialB.normalizedLabel)}`
     : "";
   const colorRule = colorA.colorFamily && colorA.colorFamily === colorB.colorFamily && colorA.shadeKey !== colorB.shadeKey
     ? `color:${pairKey(colorA.normalizedLabel, colorB.normalizedLabel)}`
     : "";
+  if (pairRule && state.duplicateNegativeRules.includes(pairRule)) {
+    return { blockedReason: "负向记录规则", hardCap: 0, reason: "已记住这组记录不是重复" };
+  }
   if (materialRule && state.duplicateNegativeRules.includes(materialRule)) {
     return { blockedReason: "负向材料规则", hardCap: 0, reason: "已记住该材料组合不是重复" };
   }

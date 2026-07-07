@@ -507,6 +507,21 @@ tbody tr.highlight-row {
   line-height: 1.6;
 }
 
+.explanation.caution {
+  padding: 8px 10px;
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  background: #fff7ed;
+}
+
+.evidence-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
 .comparison-wrap {
   border-radius: 6px;
 }

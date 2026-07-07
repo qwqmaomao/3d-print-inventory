@@ -1,6 +1,6 @@
 # Feature Specification: 重复检测 2.0 与合并流程优化
 
-**Feature Branch**: `main`
+**Feature Branch**: `002-duplicate-detection-2`
 
 **Created**: 2026-07-08
 
@@ -160,7 +160,7 @@
 - **FR-018a**: System MUST use confidence-specific merge entry labels: 90-100 “建议合并预览”, 75-89 “人工确认后合并预览”, and 60-74 “不建议合并，仍要查看预览”. Results below 60 remain hidden by default and do not show a merge entry unless the user explicitly reveals hidden results.
 - **FR-019**: System MUST not change the business data format for inventory, consumption, queue, image, backup, label, or scan data.
 - **FR-020**: System MUST not require a backend, login, external network, or CDN.
-- **FR-021**: System MUST preserve current inventory, import/export, backup, labels, QR code, scan, quality check, audit, and print queue workflows.
+- **FR-021**: System MUST preserve current inventory, import/export, backup, labels, QR code, scan, quality check, audit, quote/calculator, and print queue workflows.
 - **FR-022**: System MUST keep existing ignored-pair behavior aligned with inventory health checks, so ignored duplicate pairs remain hidden by default in both places.
 - **FR-023**: System MUST display conflict hints when evidence is mixed, such as same image but different color family, or same brand/material/diameter but different product line.
 - **FR-024**: System MUST allow users to proceed to merge preview for non-hidden results, but must clearly warn when the result is not recommended for merge.
@@ -189,7 +189,7 @@
 - **SC-007**: 100% of 60-74 results display the weakened merge entry “不建议合并，仍要查看预览” or equivalent warning language before merge preview.
 - **SC-008**: Existing ignore, remember-not-duplicate, merge preview, trash recovery, consumption migration, and queue migration flows continue to pass their v1.0 baseline acceptance scenarios.
 - **SC-008a**: After a user remembers a non-duplicate judgment for a material or color combination, duplicate detection and inventory health checks no longer show similar combinations as serious duplicate problems by default.
-- **SC-009**: Inventory, import/export, ZIP backup, JSON backup, labels, QR, scan, inventory health, audit, and print queue baseline workflows continue to pass after duplicate detection 2.0 changes.
+- **SC-009**: Inventory, import/export, ZIP backup, JSON backup, labels, QR, scan, inventory health, audit, quote/calculator, and print queue baseline workflows continue to pass after duplicate detection 2.0 changes.
 - **SC-010**: Users can distinguish “同类耗材” from “疑似重复” from “几乎确定重复” without inspecting raw score details.
 
 ## Assumptions
