@@ -117,10 +117,10 @@
 - [ ] T036 [P] [US4] Review Cost Settings defaults and quote derivation in `specs/001-v1-baseline-spec/data-model.md`
 - [ ] T037 [P] [US4] Review Restock Settings thresholds in `specs/001-v1-baseline-spec/data-model.md`
 - [ ] T038 [P] [US4] Review quality, audit, and trash workflow coverage in `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
-- [ ] T039 [US4] Execute quote calculation review using one inventory item with purchase price
-- [ ] T040 [US4] Execute restock recommendation review for below-threshold inventory
-- [ ] T041 [US4] Execute audit correction review and confirm an adjustment record is created
-- [ ] T042 [US4] Execute drying reminder review for opened PETG, TPU, PA, or PC inventory
+- [ ] T039 [US4] Execute quote calculation review using one inventory item with purchase price and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T040 [US4] Execute restock recommendation review for below-threshold inventory and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T041 [US4] Execute audit correction review, confirm an adjustment record is created, and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T042 [US4] Execute drying reminder review for opened PETG, TPU, PA, or PC inventory and record the result in `specs/001-v1-baseline-spec/quickstart.md`
 - [ ] T043 [US4] Confirm future cost-setting changes update `specs/001-v1-baseline-spec/spec.md` and `specs/001-v1-baseline-spec/data-model.md`
 
 **Checkpoint**: Quote, restock, audit, drying, and quality baseline is independently verified and protected.
@@ -138,11 +138,11 @@
 - [ ] T044 [P] [US5] Review duplicate scoring weights, levels, filters, and hard caps in `specs/001-v1-baseline-spec/spec.md`
 - [ ] T045 [P] [US5] Review Duplicate Rule State and Trash Entry entities in `specs/001-v1-baseline-spec/data-model.md`
 - [ ] T046 [P] [US5] Review duplicate UI workflow contract in `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
-- [ ] T047 [US5] Execute duplicate explanation validation for two intentionally similar inventory records
-- [ ] T048 [US5] Execute hard-cap validation for same-base different modifier materials such as ABS and ABS-GF
-- [ ] T049 [US5] Execute color-shade hard-cap validation for same-family different shade colors
-- [ ] T050 [US5] Execute ignore-pair validation and confirm inventory health hides the ignored duplicate by default
-- [ ] T051 [US5] Execute merge preview review and confirm trash recovery expectations remain documented
+- [ ] T047 [US5] Execute duplicate explanation validation for two intentionally similar inventory records and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T048 [US5] Execute hard-cap validation for same-base different modifier materials such as ABS and ABS-GF and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T049 [US5] Execute color-shade hard-cap validation for same-family different shade colors and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T050 [US5] Execute ignore-pair validation, confirm inventory health hides the ignored duplicate by default, and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T051 [US5] Execute merge preview review, confirm trash recovery expectations remain documented, and record the result in `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
 - [ ] T052 [US5] Confirm future duplicate scoring changes must update `specs/001-v1-baseline-spec/spec.md`, `specs/001-v1-baseline-spec/data-model.md`, and `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
 
 **Checkpoint**: Duplicate detection and trash recovery baseline is independently verified and protected.
@@ -161,10 +161,10 @@
 - [ ] T054 [P] [US6] Review label and scan workflow contract in `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
 - [ ] T055 [P] [US6] Review QR and scan formats in `specs/001-v1-baseline-spec/spec.md`
 - [ ] T056 [US6] Execute batch label selection and print-view validation from `specs/001-v1-baseline-spec/quickstart.md`
-- [ ] T057 [US6] Execute small, medium, and large label size validation
+- [ ] T057 [US6] Execute small, medium, and large label size validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
 - [ ] T058 [US6] Execute QR fallback review by confirming readable text remains part of the label contract in `specs/001-v1-baseline-spec/contracts/ui-workflows.md`
-- [ ] T059 [US6] Execute manual scan lookup validation for `FIL-0001`, `index.html#filament=FIL-0001`, and `FIL-0001-01`
-- [ ] T060 [US6] Execute scan quick consume validation and confirm a consumption record is created
+- [ ] T059 [US6] Execute manual scan lookup validation for `FIL-0001`, `index.html#filament=FIL-0001`, and `FIL-0001-01`, then record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T060 [US6] Execute scan quick consume validation, confirm a consumption record is created, and record the result in `specs/001-v1-baseline-spec/quickstart.md`
 - [ ] T061 [US6] Confirm future scan or QR changes preserve manual fallback and main-code parsing in `specs/001-v1-baseline-spec/spec.md`
 
 **Checkpoint**: Label, QR, and scan baseline is independently verified and protected.
@@ -181,6 +181,13 @@
 - [ ] T065 Confirm no business code files were modified while completing baseline tasks by checking `index.html`, `style.css`, `app.js`, and `vendor/`
 - [ ] T066 Run `node --check app.js` after any future JavaScript change and record the result in the relevant feature quickstart
 - [ ] T067 Update `specs/001-v1-baseline-spec/tasks.md` only if new baseline-protection tasks are discovered
+- [ ] T068 Execute current filtered inventory `.xlsx` export validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T069 Execute restock list `.xlsx` export validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T070 Execute scan custom deduction validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T071 Execute scan update-location validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T072 Execute scan mark-opened validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T073 Execute scan enter-audit validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
+- [ ] T074 Execute scan add-to-queue validation and record the result in `specs/001-v1-baseline-spec/quickstart.md`
 
 ---
 

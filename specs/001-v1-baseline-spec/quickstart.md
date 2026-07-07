@@ -25,6 +25,16 @@
 
    Expected: spreadsheet, ZIP, and QR library files are present.
 
+## Local Scale Baseline
+
+The documented v1.0 local-use scale is at least 500 inventory records, 200 image
+references, 1000 consumption records, and 200 queue tasks in one browser
+profile.
+
+Expected:
+- Inventory rendering, import preview, duplicate review, manual scan lookup,
+  label generation, JSON backup, and ZIP backup remain usable at this scale.
+
 ## Open the App
 
 1. Open `index.html` directly in a browser.
@@ -68,6 +78,17 @@ Expected:
 - ZIP contains `data.json` and `images/` when images exist.
 - ZIP restore asks for confirmation and restores records plus available images.
 
+## Spreadsheet Export Baseline
+
+1. Apply an inventory filter.
+2. Export the current filtered inventory list as `.xlsx`.
+3. Open the restock list.
+4. Export the restock list as `.xlsx`.
+
+Expected:
+- The filtered inventory export contains only the visible filtered records.
+- The restock export contains the generated purchase recommendation rows.
+
 ## Consumption and Queue Baseline
 
 1. Add a manual consumption record for an inventory item.
@@ -102,11 +123,18 @@ Expected:
 5. Use manual scan lookup with `FIL-0001`, `index.html#filament=FIL-0001`, or
    `FIL-0001-01` using an existing code.
 6. Use quick consume for 10g.
+7. Use custom deduction.
+8. Update location.
+9. Mark opened.
+10. Enter audit from the scan action panel.
+11. Add the scanned item to the print queue.
 
 Expected:
 - Labels show readable codes and QR areas.
 - Manual scan resolves the main filament item.
 - Quick consume deducts stock and creates a consumption record.
+- Custom deduction, location update, mark opened, audit entry, and add-to-queue
+  actions are available from the scan action panel.
 
 ## Regression Rule for Future Changes
 

@@ -1,6 +1,6 @@
 # Implementation Plan: 3D 打印耗材库存 v1.0 基线
 
-**Branch**: `001-v1-baseline-spec` | **Date**: 2026-07-08 | **Spec**: `specs/001-v1-baseline-spec/spec.md`
+**Branch**: `main` | **Date**: 2026-07-08 | **Spec**: `specs/001-v1-baseline-spec/spec.md`
 
 **Input**: Feature specification from `specs/001-v1-baseline-spec/spec.md`
 
@@ -41,20 +41,22 @@ manual input is the required fallback.
 
 **Project Type**: Static local web application.
 
-**Performance Goals**: Maintain responsive personal inventory use for ordinary
-local data sets. Future features must avoid introducing work that blocks page
-load, inventory rendering, import preview, backup creation, or label generation
-for typical personal use.
+**Performance Goals**: Maintain responsive personal inventory use at the v1.0
+baseline scale: at least 500 inventory records, 200 image references, 1000
+consumption records, and 200 queue tasks remain usable for inventory rendering,
+import preview, backup creation, scan lookup, duplicate review, and label
+generation.
 
 **Constraints**: No backend, no login, no external CDN dependency, no large
 rewrite, no unnecessary dependency. Preserve current LocalStorage keys,
 IndexedDB image storage, WPS/Excel import behavior, JSON backup, ZIP backup,
 trash recovery, duplicate detection, labels, and scan workflows.
 
-**Scale/Scope**: Single-user local inventory management. The current baseline is
-not a multi-user, cross-device, server-synchronized, or printer-integrated
-system. Single-spool sub-record management is a future direction, not part of
-the current data model.
+**Scale/Scope**: Single-user local inventory management at the documented local
+scale of 500 inventory records, 200 image references, 1000 consumption records,
+and 200 queue tasks. The current baseline is not a multi-user, cross-device,
+server-synchronized, or printer-integrated system. Single-spool sub-record
+management is a future direction, not part of the current data model.
 
 ## Constitution Check
 
