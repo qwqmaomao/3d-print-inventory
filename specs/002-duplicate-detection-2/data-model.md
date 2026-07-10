@@ -49,7 +49,7 @@ Represents one pair of inventory items under evaluation.
 
 Validation:
 
-- Brand, base material, and diameter are weak evidence.
+- Brand and base material are weak evidence. Diameter is reference-only and does not affect score, candidate recall, or blocking.
 - 75+ requires at least two independent strong evidence entries, or one uniqueness-heavy strong entry with no conflicts.
 - Missing fields do not create evidence.
 
@@ -111,7 +111,7 @@ Validation:
 
 | Condition | Cap |
 |---|---:|
-| Only same brand, base material, and diameter | 55 |
+| Only same brand and base material | 55 |
 | Different color family | 50 |
 | Same color family but different shade/color number/effect | 70 |
 | PLA Basic vs PLA Matte/Silk | 65 |
@@ -158,7 +158,7 @@ Validation:
 ### Duplicate result rendering
 
 1. Build candidate pair.
-2. Exclude blocked base material or diameter conflicts.
+2. Exclude blocked base material conflicts.
 3. Collect weak evidence.
 4. Collect strong evidence.
 5. Collect conflict caps and negative rules.

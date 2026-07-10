@@ -27,7 +27,7 @@
 **Critical**: Complete this phase before user story work. These tasks keep the work incremental and reduce the risk of breaking merge, ignore, and health flows.
 
 - [X] T006 Extract candidate pair construction helper near `scoreDuplicatePair()` in `app.js` without changing returned result shape.
-- [X] T007 Extract weak evidence collection helper near duplicate comparison helpers in `app.js` for brand, base material, and diameter.
+- [X] T007 Extract weak evidence collection helper near duplicate comparison helpers in `app.js` for brand and base material; keep diameter reference-only.
 - [X] T008 Extract strong evidence collection helper near duplicate comparison helpers in `app.js` for exact color, color code, product line, purchase/shop, position sequence, image/import source, and name/notes identifiers.
 - [X] T009 Extract hard cap application helper near `scoreDuplicatePair()` in `app.js` that accepts raw score, caps, and evidence but initially preserves current behavior.
 - [X] T010 Extract duplicate explanation helper near `duplicateExplanation()` in `app.js` while preserving existing displayed explanation text.
@@ -42,7 +42,7 @@
 
 **Goal**: Same brand, same base material, and same diameter can recall candidates and explain similarity, but cannot alone create high-confidence duplicates.
 
-**Independent Test**: Create or use same-brand/same-material/same-diameter records with different colors or product lines and verify they remain hidden or “同类耗材”, never “疑似重复” or “几乎确定重复”.
+**Independent Test**: Create or use same-brand/same-material records with different colors or product lines and verify they remain hidden or “同类耗材”, never “疑似重复” or “几乎确定重复”; changing diameter must not change the score.
 
 ### Tests for User Story 1
 
@@ -51,9 +51,9 @@
 
 ### Implementation for User Story 1
 
-- [X] T015 [US1] Update weak evidence scoring in `app.js` so brand, base material, and diameter are candidate recall/weak evidence only.
+- [X] T015 [US1] Update weak evidence scoring in `app.js` so brand and base material are candidate recall/weak evidence only and diameter is reference-only.
 - [X] T016 [US1] Update `scoreDuplicatePair()` in `app.js` so weak-only results cannot enter 75+.
-- [X] T017 [US1] Apply the weak-evidence-only hard cap of 55 in `app.js` when only brand, base material, and diameter match.
+- [X] T017 [US1] Apply the weak-evidence-only hard cap of 55 in `app.js` when only brand and base material match.
 - [X] T018 [US1] Update `duplicateLevel()` in `app.js` so 75-89 displays “疑似重复” and 60-74 displays “同类耗材，不建议合并”.
 - [X] T019 [US1] Ensure `findDuplicateResults()` in `app.js` still hides below-threshold results and keeps existing ignored-pair filtering.
 
@@ -242,7 +242,7 @@ Task: "T063 [P] Validate labels, QR, scan lookup, quick consume, audit entry, an
 
 1. Complete Phase 1 and Phase 2.
 2. Complete US1 only.
-3. Validate that weak-only same brand/material/diameter pairs cannot reach 75+.
+3. Validate that weak-only same brand/material pairs cannot reach 75+ and diameter changes do not affect score.
 4. Stop and confirm duplicate results still render and ignored pairs still hide.
 
 ### Incremental Delivery

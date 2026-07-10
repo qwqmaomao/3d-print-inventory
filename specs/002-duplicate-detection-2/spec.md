@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "增加“重复检测 2.0 + 合并流程优化”功能包。目标是减少当前耗材重复检测的误报，尤其是同品牌、同材料、同线径的常见耗材不应仅凭这些基础字段就被判定为高度疑似重复。系统应区分“同类耗材”和“疑似重复记录”，让用户更放心地忽略、记住误判或合并。范围包括弱化品牌/基础材料/线径、增加强证据、增加 hard cap、调整等级、显示自然语言解释、保留现有忽略/负向规则/合并预览/回收站/迁移能力，不修改业务数据格式，不引入后端，不依赖 CDN，不破坏现有功能。"
+**Input**: User description: "增加“重复检测 2.0 + 合并流程优化”功能包。目标是减少当前耗材重复检测的误报，尤其是同品牌、同材料的常见耗材不应仅凭这些基础字段就被判定为高度疑似重复；线径不参与重复检测，仅作对比参考。系统应区分“同类耗材”和“疑似重复记录”，让用户更放心地忽略、记住误判或合并。范围包括弱化品牌/基础材料、增加强证据、增加 hard cap、调整等级、显示自然语言解释、保留现有忽略/负向规则/合并预览/回收站/迁移能力，不修改业务数据格式，不引入后端，不依赖 CDN，不破坏现有功能。"
 
 ## Clarifications
 
@@ -14,6 +14,7 @@
 
 - Q: 强证据达到“疑似重复”的最低门槛是什么？ → A: 进入 75+ 需要至少 2 个独立强证据；如果是唯一性很强的证据，例如相同导入来源、图片或色号且无冲突，可按 1 个强证据放行。
 - Q: 产品线应该怎么识别？ → A: 从“材料、名称、备注”中识别固定别名表：Basic、Matte/哑光、Silk/丝绸、HF、GF、CF、Support/支撑、Wood/木质、Plus、Pro；未知词不参与产品线判断。
+- Q: 线径是否参与重复检测？ → A: 线径不参与重复检测评分、候选召回或阻断，只在字段对比表中作为参考信息显示。
 - Q: 多个 hard cap 同时触发时，最终分数怎么定？ → A: 最终分数取原始分数和所有适用 hard cap 的最低值；同图片、同导入来源、同色号这类唯一性强证据可以解除“仅基础字段 55”上限，但不能解除颜色冲突、产品线冲突等冲突型上限。
 - Q: 负向规则应该影响多大范围？ → A: 同时保留具体记录对忽略，并保存可复用的材料/颜色签名规则，例如 ABS|ABS-GF、湖蓝|深蓝；后续类似组合默认降权或隐藏。
 - Q: 合并建议按钮什么时候出现、怎么写？ → A: 90+ 显示“建议合并预览”；75-89 显示“人工确认后合并预览”；60-74 显示弱化按钮“不建议合并，仍要查看预览”；低于 60 默认不显示。
@@ -22,16 +23,16 @@
 
 ### User Story 1 - 降低常见基础字段误判 (Priority: P1)
 
-作为拥有大量常见品牌和常见材料的用户，我希望系统不要因为“拓竹/Bambu + PLA + 1.75mm”这类基础字段相同就把两条记录判定为高度疑似重复，这样我可以把同类耗材和真正重复记录分开处理。
+作为拥有大量常见品牌和常见材料的用户，我希望系统不要因为“拓竹/Bambu + PLA”这类基础字段相同就把两条记录判定为高度疑似重复，且线径不影响重复判断，这样我可以把同类耗材和真正重复记录分开处理。
 
 **Why this priority**: 这是本功能包的核心痛点。若基础字段仍能单独推高分数，重复检测 2.0 就没有解决主要误报来源。
 
-**Independent Test**: 创建或准备多条同品牌、同基础材料、同线径但颜色、产品线、批次、位置或图片不同的耗材记录，运行重复检测并查看等级。
+**Independent Test**: 创建或准备多条同品牌、同基础材料但颜色、产品线、批次、位置或图片不同的耗材记录，运行重复检测并查看等级；再修改线径确认结果不变。
 
 **Acceptance Scenarios**:
 
-1. **Given** 两条记录同品牌、同基础材料、同线径，但没有颜色完全一致、色号、产品线、批次、购买日期、店铺、位置、图片、导入来源或名称/备注关键标识等强证据，**When** 用户运行重复检测，**Then** 结果最高只能作为“同类耗材”或被隐藏，不得进入“疑似重复”或“几乎确定重复”。
-2. **Given** 两条记录只是同品牌、同材料、同线径，**When** 用户查看重复检测卡片，**Then** 卡片必须说明“基础字段常见，只作为弱证据，不建议合并”。
+1. **Given** 两条记录同品牌、同基础材料，但没有颜色完全一致、色号、产品线、批次、购买日期、店铺、位置、图片、导入来源或名称/备注关键标识等强证据，**When** 用户运行重复检测，**Then** 结果最高只能作为“同类耗材”或被隐藏，不得进入“疑似重复”或“几乎确定重复”。
+2. **Given** 两条记录只是同品牌、同材料，**When** 用户查看重复检测卡片，**Then** 卡片必须说明“基础字段常见，只作为弱证据，不建议合并”，且线径只显示为不参与评分的参考字段。
 3. **Given** 一批拓竹/Bambu PLA 1.75mm 记录颜色或产品线不同，**When** 用户运行重复检测，**Then** 系统不得批量显示为高风险重复项。
 
 ---
@@ -58,11 +59,11 @@
 
 **Why this priority**: hard cap 是防止误报重新出现的核心安全阀。
 
-**Independent Test**: 使用同品牌同材料同线径、颜色大类不同、同色系不同色号、PLA Basic 与 PLA Matte/Silk、无强证据等案例运行重复检测。
+**Independent Test**: 使用同品牌同材料、颜色大类不同、同色系不同色号、PLA Basic 与 PLA Matte/Silk、无强证据等案例运行重复检测，并确认更改线径不改变分数。
 
 **Acceptance Scenarios**:
 
-1. **Given** 两条记录仅满足同品牌、同材料、同线径，**When** 系统评分，**Then** 总分最高为 55。
+1. **Given** 两条记录仅满足同品牌、同材料，**When** 系统评分，**Then** 总分最高为 55。
 2. **Given** 两条记录颜色大类不同，**When** 系统评分，**Then** 总分最高为 50。
 3. **Given** 两条记录同色系但色号或效果不同，**When** 系统评分，**Then** 总分最高为 70。
 4. **Given** 两条记录为 PLA Basic 与 PLA Matte 或 PLA Silk，**When** 系统评分，**Then** 总分最高为 65。
@@ -120,9 +121,9 @@
 
 ### Edge Cases
 
-- 大量耗材具有相同品牌、基础材料和线径时，系统必须优先显示“同类耗材”或隐藏低置信度结果，避免高风险误报刷屏。
+- 大量耗材具有相同品牌和基础材料时，系统必须优先显示“同类耗材”或隐藏低置信度结果，避免高风险误报刷屏；线径不参与重复检测。
 - 颜色名称只有同一个大类但色号、深浅、透明、丝绸、哑光、金属等效果不同，应触发同色系不同色号/效果上限。
-- 颜色大类不同，即使品牌、基础材料和线径相同，也不得显示为高置信度重复。
+- 颜色大类不同，即使品牌和基础材料相同，也不得显示为高置信度重复。
 - 产品线不同，例如 Basic、Matte、Silk、HF、GF、CF、Support、Wood、Plus、Pro 等，不得仅凭基础材料相同而建议合并。
 - 产品线只能从材料、名称和备注字段中的固定别名表识别；未知词或无法识别的系列词不得被模糊猜测为产品线匹配。
 - 缺少颜色、批次、购买日期、店铺、位置或图片时，系统不得把缺失字段当作强证据。
@@ -136,12 +137,12 @@
 
 ### Functional Requirements
 
-- **FR-001**: System MUST treat brand, base material, and diameter as candidate recall fields and weak evidence, not as strong evidence by themselves.
-- **FR-002**: System MUST prevent brand, base material, and diameter alone from raising a pair to 75 points or above.
+- **FR-001**: System MUST treat brand and base material as candidate recall fields and weak evidence, not as strong evidence by themselves; diameter MUST NOT participate in duplicate detection scoring, recall, or blocking.
+- **FR-002**: System MUST prevent brand and base material alone from raising a pair to 75 points or above.
 - **FR-003**: System MUST define strong evidence categories including exact color match, color code or color number match, product line match, close batch or purchase information, close storage position sequence, same image or import source, and matching key identifiers in name or notes.
 - **FR-003a**: System MUST identify product line only from the material, name, and notes fields using a fixed alias list: Basic, Matte/哑光, Silk/丝绸, HF, GF, CF, Support/支撑, Wood/木质, Plus, and Pro. Unknown words MUST NOT be fuzzy-matched into product line evidence.
 - **FR-004**: System MUST show which strong evidence categories contributed to the result for every displayed duplicate candidate.
-- **FR-005**: System MUST cap pairs with only same brand, same material, and same diameter at 55.
+- **FR-005**: System MUST cap pairs with only same brand and same material at 55.
 - **FR-005a**: System MUST compute the final duplicate score as the minimum of the raw score and all applicable hard caps. Uniqueness-heavy strong evidence such as same image, same import source, or same color code MAY remove the weak-evidence-only 55 cap, but MUST NOT remove conflict caps such as color-family conflict, same color family with different shade/effect, or different product line.
 - **FR-006**: System MUST cap pairs with different color families at 50.
 - **FR-007**: System MUST cap pairs with same color family but different shade, color number, or effect at 70.
@@ -162,13 +163,13 @@
 - **FR-020**: System MUST not require a backend, login, external network, or CDN.
 - **FR-021**: System MUST preserve current inventory, import/export, backup, labels, QR code, scan, quality check, audit, quote/calculator, and print queue workflows.
 - **FR-022**: System MUST keep existing ignored-pair behavior aligned with inventory health checks, so ignored duplicate pairs remain hidden by default in both places.
-- **FR-023**: System MUST display conflict hints when evidence is mixed, such as same image but different color family, or same brand/material/diameter but different product line.
+- **FR-023**: System MUST display conflict hints when evidence is mixed, such as same image but different color family, or same brand/material but different product line.
 - **FR-024**: System MUST allow users to proceed to merge preview for non-hidden results, but must clearly warn when the result is not recommended for merge.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Duplicate Candidate**: A pair of inventory records being evaluated for similarity. It includes the two record references, score, level, recommendation, evidence summary, hard cap state, conflict hints, and ignored state.
-- **Weak Evidence**: Common fields that help find candidate pairs but do not prove duplication alone, including brand, base material, and diameter.
+- **Weak Evidence**: Common fields that help find candidate pairs but do not prove duplication alone, including brand and base material. Diameter is only a reference field and does not participate in duplicate detection.
 - **Strong Evidence**: Fields or signals that meaningfully indicate the same physical or imported record, including exact color, color code/number, product line, batch, purchase date, shop, storage position sequence, image/import source, and key identifiers in name or notes. Reaching 75+ normally requires at least two independent strong evidence categories; a uniqueness-heavy signal such as same image, same import source, or same color code may satisfy the threshold alone only when no conflict is present.
 - **Product Line Signature**: A derived comparison value from material, name, and notes using only the fixed alias list Basic, Matte/哑光, Silk/丝绸, HF, GF, CF, Support/支撑, Wood/木质, Plus, and Pro. It can provide strong evidence when matching, and a conflict/hard cap when different, but unknown text is treated as unknown rather than guessed.
 - **Hard Cap Rule**: A rule that limits the maximum score and confidence level when conflicts or weak-only evidence are present. When multiple hard caps apply, the final score uses the lowest applicable cap. Uniqueness-heavy evidence may remove only the weak-evidence-only cap, not conflict caps.
@@ -180,8 +181,8 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: In a test set of at least 20 common same-brand, same-material, same-diameter but different-color/product-line records, 0 pairs are classified as 75+ unless at least two independent strong evidence categories are present, or one uniqueness-heavy strong evidence category is present with no conflicting fields.
-- **SC-002**: A pair with only same brand, same material, and same diameter never scores above 55.
+- **SC-001**: In a test set of at least 20 common same-brand, same-material but different-color/product-line records, 0 pairs are classified as 75+ unless at least two independent strong evidence categories are present, or one uniqueness-heavy strong evidence category is present with no conflicting fields; changing diameter does not change the duplicate score.
+- **SC-002**: A pair with only same brand and same material never scores above 55.
 - **SC-003**: A same-color-family but different shade/effect pair never scores above 70.
 - **SC-004**: A color-family conflict pair never scores above 50.
 - **SC-005**: PLA Basic versus PLA Matte or PLA Silk never scores above 65 unless a future specification explicitly changes the cap.

@@ -40,7 +40,7 @@ Every displayed duplicate card must show:
 
 | Evidence type | User-facing rule |
 |---|---|
-| Weak evidence | Brand, base material, and diameter may explain similarity but must not imply high confidence alone |
+| Weak evidence | Brand and base material may explain similarity but must not imply high confidence alone; diameter is reference-only |
 | Strong evidence | Exact color, explicit color code, product line match, close batch/purchase/shop, close position sequence, same image/import source, or matching key identifiers |
 | Uniqueness-heavy evidence | Same image, same import source, or same explicit color code may satisfy the strong-evidence threshold alone only when no conflicts exist |
 
@@ -48,7 +48,7 @@ Every displayed duplicate card must show:
 
 | Condition | Required user-facing hint |
 |---|---|
-| Only same brand/material/diameter | 基础字段常见，只作为弱证据，不建议合并 |
+| Only same brand/material | 基础字段常见，只作为弱证据，不建议合并 |
 | Different color family | 颜色大类不同，触发分数上限 50 |
 | Same family but different shade/effect/code | 同色系不同色号/效果，触发分数上限 70 |
 | Different product line | 同基材不同产品线，不建议合并 |
@@ -62,7 +62,7 @@ Merge preview must remain the only path to merge records. It must show:
 - Score, level, and merge advice.
 - Any hard cap or conflict reason.
 - A warning for 60-74 results.
-- Field choice rows for conflicting brand, material, color, and diameter.
+- Field choice rows for conflicting brand, material, and color; diameter may still be shown in merge preview as an editable inventory field but is not duplicate evidence.
 - Static merged totals for quantity, remaining weight, purchase price, notes, records, and queue references.
 - Image retention strategy.
 - Confirmation that the removed record goes to trash and references migrate.

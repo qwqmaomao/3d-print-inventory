@@ -12,7 +12,7 @@
 
 ## Decision: Separate candidate recall from evidence scoring
 
-**Rationale**: Brand, base material, and diameter are useful for finding candidate pairs, but common combinations such as Bambu PLA 1.75mm are too frequent to prove duplication. The plan treats them as weak evidence and applies caps before high-confidence levels.
+**Rationale**: Brand and base material are useful for finding candidate pairs, but common combinations such as Bambu PLA are too frequent to prove duplication. Diameter is reference-only and does not participate in duplicate detection. The plan treats brand/material as weak evidence and applies caps before high-confidence levels.
 
 **Alternatives considered**:
 

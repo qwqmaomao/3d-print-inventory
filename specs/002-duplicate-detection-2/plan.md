@@ -6,7 +6,7 @@
 
 ## Summary
 
-在现有本地静态网页中增量优化重复检测，降低同品牌、同基础材料、同线径导致的误报。实现方式是在当前 `app.js` 的重复检测链路上小步重构：保留 `findDuplicateResults()`、`scoreDuplicatePair()`、忽略、负向规则、合并预览、回收站、消耗记录迁移和队列引用迁移，拆出候选召回、弱证据、强证据、hard cap、负向规则和解释文案函数，让“同类耗材”和“疑似重复记录”更清晰。
+在现有本地静态网页中增量优化重复检测，降低同品牌、同基础材料导致的误报；线径只作为对比参考，不参与评分、召回或阻断。实现方式是在当前 `app.js` 的重复检测链路上小步重构：保留 `findDuplicateResults()`、`scoreDuplicatePair()`、忽略、负向规则、合并预览、回收站、消耗记录迁移和队列引用迁移，拆出候选召回、弱证据、强证据、hard cap、负向规则和解释文案函数，让“同类耗材”和“疑似重复记录”更清晰。
 
 不新增后端、不依赖 CDN、不修改现有业务数据格式。LocalStorage、IndexedDB、JSON/ZIP 备份格式继续兼容 v1.0 基线。
 
@@ -87,7 +87,7 @@ See [research.md](./research.md).
 Key decisions:
 
 - Use rule-based signatures rather than fuzzy global similarity.
-- Treat brand, base material, and diameter as candidate recall and weak evidence.
+- Treat brand and base material as candidate recall and weak evidence; diameter is reference-only.
 - Require at least two independent strong evidence categories for 75+, except one uniqueness-heavy signal with no conflicts.
 - Apply final score as `min(rawScore, applicableHardCaps)`, with uniqueness-heavy evidence able to remove only the weak-evidence-only cap.
 - Apply negative rules in duplicate detection and inventory health.
@@ -110,7 +110,7 @@ Key decisions:
    - `buildDuplicateExplanations(result)`
    - `getMergeEntryLabel(result)`
 3. Update scoring:
-   - Candidate recall uses brand/base material/diameter and existing blocking for different base material or diameter.
+   - Candidate recall uses brand/base material and existing blocking for different base material; diameter is rendered as reference-only.
    - Weak evidence cannot reach 75+ by itself.
    - Strong evidence threshold follows clarifications.
    - Product line detection uses only fixed aliases from material/name/notes.
@@ -128,7 +128,7 @@ Key decisions:
 
 - Static: `node --check app.js`.
 - Targeted duplicate cases:
-  - Same brand/material/diameter only -> max 55.
+  - Same brand/material only -> max 55.
   - Different color families -> max 50.
   - Same color family different shade/effect -> max 70.
   - PLA Basic vs PLA Matte/Silk -> max 65.

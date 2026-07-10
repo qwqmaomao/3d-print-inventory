@@ -1,6 +1,7 @@
 const STORAGE_KEY = "filament_inventory_v1";
 const CONSUMPTION_KEY = "filament_consumption_v1";
 const QUEUE_KEY = "filament_queue_v1";
+const DEVICES_KEY = "filament_devices_v1";
 const COST_SETTINGS_KEY = "filament_cost_settings_v1";
 const TRASH_KEY = "filament_trash_v1";
 const DUPLICATE_IGNORES_KEY = "filament_duplicate_ignores_v1";
@@ -10,6 +11,8 @@ const QUALITY_IGNORES_KEY = "filament_quality_ignores_v1";
 const LABEL_SETTINGS_KEY = "filament_label_settings_v1";
 const IMAGE_DB_NAME = "filament_inventory_assets_v1";
 const IMAGE_STORE = "images";
+const DATA_VERSION = 5;
+const APP_VERSION = "v2.1";
 
 const costDefaults = {
   wearRate: 2,
@@ -25,6 +28,7 @@ const costDefaults = {
 };
 
 const queueStatuses = ["待打印", "准备中", "打印中", "暂停", "已完成", "失败", "取消"];
+const queuePriorities = ["普通", "低", "高", "紧急"];
 const failureReasons = ["翘边", "堵头", "断料", "模型问题", "支撑失败", "停电", "手动取消", "其他"];
 const duplicateDefaults = { minScore: 75, showIgnored: false };
 const labelDefaults = { size: "medium", qrMode: "code" };
@@ -54,6 +58,7 @@ const state = {
   items: loadArray(STORAGE_KEY).map(normalizeItem),
   consumption: loadArray(CONSUMPTION_KEY).map(normalizeConsumption),
   queue: loadArray(QUEUE_KEY).map(normalizeQueue),
+  devices: loadArray(DEVICES_KEY).map(normalizeDevice),
   costSettings: loadObject(COST_SETTINGS_KEY, costDefaults),
   trash: loadArray(TRASH_KEY).map(normalizeTrashEntry),
   duplicateIgnores: loadArray(DUPLICATE_IGNORES_KEY),
@@ -67,7 +72,7 @@ const state = {
   filters: { search: "", material: "", brand: "", status: "", location: "" },
   queueFilter: "",
   sort: { key: "updatedAt", direction: "desc" },
-  activeTab: "inventory",
+  activeTab: "dashboard",
   pendingImport: []
 };
 
@@ -109,7 +114,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 function cacheElements() {
   [
     "totalItems", "totalQuantity", "totalRemaining", "riskCount", "pendingQueueCount",
-    "xlsxInput", "jsonInput", "zipInput", "exportJsonBtn", "exportZipBtn", "addItemBtn", "importPanel", "importSummary",
+    "dashboardLowStockList", "dashboardQueueList", "dashboardDryList", "dashboardAuditList", "dashboardActivityList",
+    "analyticsMetricCards", "analyticsInventoryBreakdown", "analyticsTrendBreakdown", "analyticsCostBreakdown", "analyticsRestockForecast",
+    "safetySummaryCards", "checkImagesBtn", "previewSpoolMigrationBtn", "imageCheckResult", "spoolMigrationPreview",
+    "xlsxInput", "jsonInput", "zipInput", "exportJsonBtn", "exportZipBtn", "addRecordBtn", "addItemBtn", "importPanel", "importSummary",
     "importPreviewBody", "cancelImportBtn", "confirmImportBtn", "searchInput", "materialFilter",
     "brandFilter", "statusFilter", "locationFilter", "exportFilteredBtn", "batchPrintLabelsBtn",
     "selectAllInventoryInput", "inventoryBody", "emptyState",
@@ -117,7 +125,9 @@ function cacheElements() {
     "wearRateInput", "electricityRateInput", "powerWattsInput", "laborFeeInput", "modelFeeInput",
     "postProcessFeeInput", "packagingFeeInput", "failureRateInput", "profitMultiplierInput",
     "minimumPriceInput", "copyQuoteBtn", "costBreakdown", "queueStatusFilter", "queueBody",
-    "addQueueBtn", "restockBody", "copyRestockBtn", "exportRestockBtn", "duplicateMinScoreFilter",
+    "addQueueBtn", "deviceForm", "deviceId", "deviceNameInput", "deviceModelInput", "deviceNozzleInput",
+    "deviceMaterialsInput", "deviceStatusInput", "deviceLocationInput", "deviceNotesInput", "resetDeviceFormBtn", "devicesBody",
+    "restockBody", "copyRestockBtn", "exportRestockBtn", "duplicateMinScoreFilter",
     "duplicateIgnoredFilter", "duplicatesBody", "scanDuplicatesBtn", "mergeDialog", "mergeForm",
     "mergeDialogTitle", "mergeSummary", "mergePreviewBody", "mergeImageChoice", "mergeSourceIds",
     "qualityBody", "refreshQualityBtn", "showIgnoredQualityInput", "auditBody", "saveAuditBtn",
@@ -135,7 +145,7 @@ function cacheElements() {
     "moistureInput", "dryStatusInput", "notesInput", "itemImageInput", "itemImagePreview", "clearItemImageBtn", "consumptionDialog", "consumptionForm", "consumeProjectInput",
     "consumeItemSelect", "consumeGramsInput", "consumeHoursInput", "consumeNotesInput",
     "queueDialog", "queueForm", "queueDialogTitle", "queueId", "queueNameInput",
-    "queueHoursInput", "queueStatusInput", "queueNotesInput", "queueStockHint",
+    "queueHoursInput", "queuePriorityInput", "queueDeviceInput", "queueStartInput", "queueEndInput", "queueStatusInput", "queueNotesInput", "queueStockHint",
     "queueMaterialsBody", "addQueueMaterialBtn"
   ].forEach((id) => {
     els[id] = document.getElementById(id);
@@ -149,8 +159,10 @@ function bindEvents() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => button.closest("dialog").close());
   });
+  document.addEventListener("click", handleWorkbenchClick);
 
   els.addItemBtn.addEventListener("click", () => openItemDialog());
+  els.addRecordBtn.addEventListener("click", () => openConsumptionDialog());
   els.itemForm.addEventListener("submit", saveItemFromForm);
   els.purchasePriceInput.addEventListener("input", updateUnitCostPreview);
   els.quantityInput.addEventListener("input", updateCapacityPreview);
@@ -205,6 +217,10 @@ function bindEvents() {
   els.addQueueBtn.addEventListener("click", () => openQueueDialog());
   els.queueForm.addEventListener("submit", saveQueueFromForm);
   els.addQueueMaterialBtn.addEventListener("click", () => addQueueMaterialRow());
+  els.deviceForm.addEventListener("submit", saveDeviceFromForm);
+  els.resetDeviceFormBtn.addEventListener("click", resetDeviceForm);
+  els.checkImagesBtn.addEventListener("click", renderImageMissingCheck);
+  els.previewSpoolMigrationBtn.addEventListener("click", renderSpoolMigrationPreview);
   els.queueStatusFilter.addEventListener("change", (event) => {
     state.queueFilter = event.target.value;
     renderQueueTable();
@@ -248,14 +264,18 @@ function bindEvents() {
 
 function render() {
   renderStats();
+  renderDashboard();
   renderDatalists();
   renderFilters();
   renderSelects();
   renderInventoryTable();
   renderConsumptionTable();
+  renderAnalytics();
+  renderSafetySummary();
   renderCostInputs();
   renderCostBreakdown();
   renderQueueTable();
+  renderDevices();
   renderRestockTable();
   renderDuplicates();
   renderQualityTable();
@@ -270,6 +290,57 @@ function switchTab(tab) {
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === `${tab}View`));
 }
 
+function handleWorkbenchClick(event) {
+  const actionButton = event.target.closest("[data-workbench-action]");
+  if (actionButton) {
+    event.preventDefault();
+    runWorkbenchAction(actionButton.dataset.workbenchAction);
+    return;
+  }
+  const itemButton = event.target.closest("[data-dashboard-item]");
+  if (itemButton) {
+    event.preventDefault();
+    highlightInventoryItem(itemButton.dataset.dashboardItem);
+  }
+}
+
+function runWorkbenchAction(action) {
+  if (action === "add-item") {
+    openItemDialog();
+    return;
+  }
+  if (action === "add-record") {
+    openConsumptionDialog();
+    return;
+  }
+  if (action === "import") {
+    els.xlsxInput.click();
+    return;
+  }
+  if (action === "backup") {
+    exportZipBackup();
+    return;
+  }
+  const tabMap = {
+    inventory: "inventory",
+    consumption: "consumption",
+    calculator: "calculator",
+    queue: "queue",
+    devices: "devices",
+    scan: "scan",
+    tools: "tools",
+    analytics: "analytics",
+    safety: "safety",
+    restock: "restock",
+    duplicates: "duplicates",
+    quality: "quality",
+    audit: "audit",
+    labels: "labels",
+    trash: "trash"
+  };
+  if (tabMap[action]) switchTab(tabMap[action]);
+}
+
 function renderStats() {
   const riskItems = state.items.filter(isLowStock).length;
   const riskyQueue = state.queue.filter((task) => queueRisk(task).level === "danger").length;
@@ -278,6 +349,128 @@ function renderStats() {
   els.totalRemaining.textContent = `${formatNumber(state.items.reduce((sum, item) => sum + numberOrZero(item.remainingWeight), 0))} g`;
   els.riskCount.textContent = riskItems + riskyQueue;
   els.pendingQueueCount.textContent = state.queue.filter((task) => ["待打印", "准备中", "打印中", "暂停"].includes(task.status)).length;
+}
+
+function renderDashboard() {
+  const lowStockRows = state.items
+    .filter(isLowStock)
+    .sort((a, b) => getRemainingPercent(a) - getRemainingPercent(b))
+    .slice(0, 5)
+    .map((item) => renderDashboardItemRow(
+      item,
+      `${formatNumber(item.remainingWeight)} / ${formatNumber(getTotalCapacity(item))} g，${getRemainingPercent(item)}%`
+    ));
+  renderDashboardList(els.dashboardLowStockList, lowStockRows, "暂无低库存耗材");
+
+  const queueRows = state.queue
+    .filter((task) => ["待打印", "准备中", "打印中", "暂停"].includes(task.status))
+    .sort((a, b) => activityTime(b.updatedAt || b.createdAt) - activityTime(a.updatedAt || a.createdAt))
+    .slice(0, 5)
+    .map((task) => {
+      const risk = queueRisk(task);
+      const totalGrams = getQueueMaterials(task).reduce((sum, material) => sum + getMaterialPlannedWeight(material), 0);
+      return `
+        <li>
+          <div>
+            <strong>${escapeHtml(task.name || "未命名任务")}</strong>
+            <span>${escapeHtml(task.status || "待打印")} · ${formatNumber(totalGrams)} g · ${escapeHtml(risk.message)}</span>
+          </div>
+          <button class="small-button" type="button" data-workbench-action="queue">查看</button>
+        </li>
+      `;
+    });
+  renderDashboardList(els.dashboardQueueList, queueRows, "暂无待打印任务");
+
+  const dryRows = state.items
+    .map((item) => ({ item, warning: getDryWarning(item) }))
+    .filter((entry) => entry.warning)
+    .slice(0, 5)
+    .map((entry) => renderDashboardItemRow(entry.item, `${entry.warning}，位置 ${entry.item.location || "-"}`));
+  renderDashboardList(els.dashboardDryList, dryRows, "暂无干燥风险");
+
+  const auditRows = state.items
+    .filter(needsAuditCheck)
+    .slice(0, 5)
+    .map((item) => renderDashboardItemRow(item, auditReason(item)));
+  renderDashboardList(els.dashboardAuditList, auditRows, "暂无盘点提醒");
+
+  const activityRows = getRecentActivities().slice(0, 8).map((activity) => `
+    <li>
+      <div>
+        <strong>${escapeHtml(activity.title)}</strong>
+        <span>${escapeHtml(activity.detail)}</span>
+      </div>
+      ${activity.itemId
+        ? `<button class="small-button" type="button" data-dashboard-item="${escapeAttribute(activity.itemId)}">定位</button>`
+        : `<button class="small-button" type="button" data-workbench-action="${escapeAttribute(activity.action)}">查看</button>`}
+    </li>
+  `);
+  renderDashboardList(els.dashboardActivityList, activityRows, "暂无最近动态");
+}
+
+function renderDashboardList(element, rows, emptyText) {
+  if (!element) return;
+  element.innerHTML = rows.length ? rows.join("") : `<li class="dashboard-empty">${escapeHtml(emptyText)}</li>`;
+}
+
+function renderDashboardItemRow(item, detail) {
+  return `
+    <li>
+      <div>
+        <strong>${escapeHtml(item.filamentCode || itemLabel(item))}</strong>
+        <span>${escapeHtml(itemLabel(item))} · ${escapeHtml(detail)}</span>
+      </div>
+      <button class="small-button" type="button" data-dashboard-item="${escapeAttribute(item.id)}">定位</button>
+    </li>
+  `;
+}
+
+function needsAuditCheck(item) {
+  const remaining = numberOrZero(item.remainingWeight);
+  const capacity = getTotalCapacity(item);
+  return remaining > capacity ||
+    (numberOrZero(item.quantity) <= 0 && remaining > 0) ||
+    (item.status === "已用完" && remaining > 0) ||
+    (["在用", "使用中"].includes(item.status) && remaining <= 0);
+}
+
+function auditReason(item) {
+  const remaining = numberOrZero(item.remainingWeight);
+  const capacity = getTotalCapacity(item);
+  if (remaining > capacity) return `剩余 ${formatNumber(remaining)} g 超出容量 ${formatNumber(capacity)} g`;
+  if (numberOrZero(item.quantity) <= 0 && remaining > 0) return "卷数为 0 但仍有剩余重量";
+  if (item.status === "已用完" && remaining > 0) return "状态为已用完但仍有剩余";
+  if (["在用", "使用中"].includes(item.status) && remaining <= 0) return "在用耗材剩余为 0";
+  return "建议复核";
+}
+
+function getRecentActivities() {
+  const consumptionActivities = state.consumption.map((record) => ({
+    time: activityTime(record.date),
+    title: record.project || "消耗记录",
+    detail: `${record.itemLabel || "未知耗材"} · ${formatNumber(record.grams)} g`,
+    action: "consumption"
+  }));
+  const queueActivities = state.queue.map((task) => ({
+    time: activityTime(task.updatedAt || task.createdAt),
+    title: `队列：${task.name || "未命名任务"}`,
+    detail: `${task.status || "待打印"} · ${formatNumber(task.hours)} h`,
+    action: "queue"
+  }));
+  const itemActivities = state.items.map((item) => ({
+    time: activityTime(item.updatedAt || item.createdAt),
+    title: `库存更新：${item.filamentCode || itemLabel(item)}`,
+    detail: `${itemLabel(item)} · ${formatNumber(item.remainingWeight)} g`,
+    itemId: item.id
+  }));
+  return [...consumptionActivities, ...queueActivities, ...itemActivities]
+    .filter((activity) => activity.time > 0)
+    .sort((a, b) => b.time - a.time);
+}
+
+function activityTime(value) {
+  const time = new Date(value || "").getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function renderDatalists() {
@@ -395,6 +588,9 @@ function updateInlineItem(control) {
   const item = getItem(control.dataset.itemId);
   const field = control.dataset.inlineField;
   if (!item || !field) return;
+  const previousValue = item[field];
+  const previousWeight = numberOrZero(item.remainingWeight);
+  const previousLocation = item.location || "";
   const numericFields = new Set(["quantity", "remainingWeight"]);
   let value = control.value;
   if (value === "__new__") {
@@ -407,10 +603,50 @@ function updateInlineItem(control) {
   item.totalWeight = getTotalCapacity(item);
   item.unitCost = calcUnitCost(item);
   item.status = numberOrZero(item.remainingWeight) <= 0 ? "已用完" : item.status;
+  recordInlineLedger(item, field, previousValue, previousWeight, previousLocation);
   item.updatedAt = new Date().toISOString();
   persistAll();
   render();
   flashSavedControl(item.id, field);
+}
+
+function recordInlineLedger(item, field, previousValue, previousWeight, previousLocation) {
+  if (field === "remainingWeight" && numberOrZero(item.remainingWeight) !== previousWeight) {
+    addLedgerRecord({
+      type: "手动调整",
+      project: "库存快改",
+      item,
+      beforeWeight: previousWeight,
+      afterWeight: numberOrZero(item.remainingWeight),
+      changeWeight: numberOrZero(item.remainingWeight) - previousWeight,
+      grams: Math.abs(numberOrZero(item.remainingWeight) - previousWeight),
+      notes: "库存表直接修改剩余重量"
+    });
+  }
+  if (field === "location" && item.location !== previousLocation) {
+    addLedgerRecord({
+      type: "位置变更",
+      project: "库存快改",
+      item,
+      beforeWeight: numberOrZero(item.remainingWeight),
+      afterWeight: numberOrZero(item.remainingWeight),
+      changeWeight: 0,
+      grams: 0,
+      notes: `${previousLocation || "-"} -> ${item.location || "-"}`
+    });
+  }
+  if (field === "status" && item.status !== previousValue) {
+    addLedgerRecord({
+      type: "手动调整",
+      project: "状态快改",
+      item,
+      beforeWeight: numberOrZero(item.remainingWeight),
+      afterWeight: numberOrZero(item.remainingWeight),
+      changeWeight: 0,
+      grams: 0,
+      notes: `${previousValue || "-"} -> ${item.status || "-"}`
+    });
+  }
 }
 
 function flashSavedControl(itemId, field) {
@@ -422,21 +658,231 @@ function flashSavedControl(itemId, field) {
 }
 
 function renderConsumptionTable() {
-  const rows = [...state.consumption].sort((a, b) => `${b.date}`.localeCompare(`${a.date}`));
+  const rows = [...state.consumption].sort((a, b) => `${b.date}`.localeCompare(`${a.date}`) || `${b.id}`.localeCompare(`${a.id}`));
   els.consumptionBody.innerHTML = rows.map((record) => {
     const item = getItem(record.itemId);
+    const type = record.type || inferConsumptionType(record);
+    const before = formatWeightCell(record.beforeWeight);
+    const after = formatWeightCell(record.afterWeight);
+    const change = formatChangeWeight(record);
     return `
       <tr>
         <td>${escapeHtml(record.date || "-")}</td>
-        <td><strong>${escapeHtml(record.project || "-")}</strong></td>
+        <td>${recordTypeTag(type)}</td>
+        <td><strong>${escapeHtml(record.project || "-")}</strong>${record.relatedTaskId ? `<div class="muted">任务 ${escapeHtml(record.relatedTaskId)}</div>` : ""}</td>
         <td>${escapeHtml(item ? itemLabel(item) : record.itemLabel || "已删除耗材")}</td>
-        <td>${formatNumber(record.grams)} g</td>
+        <td>${change}</td>
+        <td>${before}</td>
+        <td>${after}</td>
         <td>${formatNumber(record.hours)} h</td>
         <td>${record.cost ? `￥${formatMoney(record.cost.total)}` : "-"}</td>
         <td>${escapeHtml(record.notes || "-")}</td>
       </tr>
     `;
   }).join("");
+}
+
+function renderAnalytics() {
+  renderAnalyticsMetrics();
+  renderAnalyticsInventoryBreakdown();
+  renderAnalyticsTrendBreakdown();
+  renderAnalyticsCostBreakdown();
+  renderAnalyticsRestockForecast();
+}
+
+function renderAnalyticsMetrics() {
+  const totalRemaining = state.items.reduce((sum, item) => sum + numberOrZero(item.remainingWeight), 0);
+  const lowStock = state.items.filter(isLowStock).length;
+  const last30 = getRecordsWithinDays(30);
+  const last30Grams = sumRecordsGrams(last30);
+  const failureCost = sumRecordCost(state.consumption.filter((record) => record.type === "失败损耗"));
+  els.analyticsMetricCards.innerHTML = [
+    analyticsMetric("库存条目", state.items.length, "当前库存记录"),
+    analyticsMetric("剩余重量", `${formatNumber(totalRemaining)} g`, "所有耗材合计"),
+    analyticsMetric("低库存", lowStock, "低于 20% 或 100g"),
+    analyticsMetric("30 天消耗", `${formatNumber(last30Grams)} g`, `${last30.length} 条记录`),
+    analyticsMetric("失败损耗成本", `￥${formatMoney(failureCost)}`, "来自失败损耗记录")
+  ].join("");
+}
+
+function renderAnalyticsInventoryBreakdown() {
+  const groups = [
+    ["材料", groupItemsBy("material").slice(0, 6)],
+    ["品牌", groupItemsBy("brand").slice(0, 6)],
+    ["状态", groupItemsBy("status").slice(0, 6)],
+    ["位置", groupItemsBy("location").slice(0, 6)]
+  ];
+  els.analyticsInventoryBreakdown.innerHTML = groups.map(([title, rows]) => `
+    <div class="bar-group">
+      <h3>${escapeHtml(title)}</h3>
+      ${renderBarRows(rows, "remaining", (row) => `${formatNumber(row.remaining)} g · ${row.count} 条`)}
+    </div>
+  `).join("");
+}
+
+function renderAnalyticsTrendBreakdown() {
+  const periods = [7, 30, 90].map((days) => {
+    const records = getRecordsWithinDays(days);
+    return {
+      label: `最近 ${days} 天`,
+      value: sumRecordsGrams(records),
+      detail: `${records.length} 条记录，￥${formatMoney(sumRecordCost(records))}`
+    };
+  });
+  els.analyticsTrendBreakdown.innerHTML = renderBarRows(periods, "value", (row) => `${formatNumber(row.value)} g · ${row.detail}`);
+}
+
+function renderAnalyticsCostBreakdown() {
+  const rows = [
+    { label: "打印/扫码/队列消耗", value: sumRecordCost(state.consumption.filter((record) => ["打印消耗", "扫码消耗", "队列扣减", ""].includes(record.type))), detail: "材料与报价成本" },
+    { label: "失败损耗", value: sumRecordCost(state.consumption.filter((record) => record.type === "失败损耗")), detail: "失败任务扣减" },
+    { label: "盘点修正", value: sumRecordsGrams(state.consumption.filter((record) => record.type === "盘点修正")), detail: "按克数显示" }
+  ];
+  els.analyticsCostBreakdown.innerHTML = renderBarRows(rows, "value", (row) => row.label === "盘点修正" ? `${formatNumber(row.value)} g · ${row.detail}` : `￥${formatMoney(row.value)} · ${row.detail}`);
+}
+
+function renderAnalyticsRestockForecast() {
+  const dailyUse = sumRecordsGrams(getRecordsWithinDays(30)) / 30;
+  const rows = getRestockRows().slice(0, 8).map((row) => ({
+    label: `${row.material || "-"} / ${row.colorName || "-"}`,
+    value: numberOrZero(row.remainingWeight),
+    detail: `${row.brand || "-"} · 建议 ${row.suggestedQuantity} 卷${dailyUse ? ` · 约 ${formatNumber(row.remainingWeight / dailyUse)} 天` : ""}`
+  }));
+  els.analyticsRestockForecast.innerHTML = rows.length ? renderBarRows(rows, "value", (row) => `${formatNumber(row.value)} g · ${row.detail}`) : `<p class="muted">暂无补货压力。</p>`;
+}
+
+function renderSafetySummary() {
+  const imageKeys = getReferencedImageKeys();
+  const totalSpools = state.items.reduce((sum, item) => sum + Math.max(1, numberOrZero(item.quantity) || 1), 0);
+  els.safetySummaryCards.innerHTML = [
+    analyticsMetric("数据版本", `v${DATA_VERSION}`, `${APP_VERSION} 本地结构`),
+    analyticsMetric("库存型号", state.items.length, `预计实体卷 ${totalSpools}`),
+    analyticsMetric("图片引用", imageKeys.length, "库存 + 回收站 imageKey"),
+    analyticsMetric("流水记录", state.consumption.length, "使用记录 / 库存流水"),
+    analyticsMetric("队列 / 设备", `${state.queue.length} / ${state.devices.length}`, "排班任务和设备")
+  ].join("");
+}
+
+async function renderImageMissingCheck() {
+  const keys = getReferencedImageKeys();
+  const missing = [];
+  for (const key of keys) {
+    const image = await getImage(key);
+    if (!image?.blob) missing.push(key);
+  }
+  els.imageCheckResult.innerHTML = missing.length
+    ? `<div class="form-hint danger">发现 ${missing.length} 个缺失图片：${escapeHtml(missing.join("、"))}</div>`
+    : `<div class="form-hint">图片检查完成：${keys.length} 个引用均可在 IndexedDB 找到。</div>`;
+}
+
+function renderSpoolMigrationPreview() {
+  const rows = state.items.slice(0, 10).map((item) => {
+    const quantity = Math.max(1, numberOrZero(item.quantity) || 1);
+    const examples = Array.from({ length: Math.min(quantity, 3) }, (_, index) => `${item.filamentCode}-${String(index + 1).padStart(2, "0")}`);
+    return {
+      label: item.filamentCode || itemLabel(item),
+      value: quantity,
+      detail: `${itemLabel(item)} · ${quantity} 卷 · ${examples.join(" / ")}${quantity > 3 ? " ..." : ""}`
+    };
+  });
+  const totalSpools = state.items.reduce((sum, item) => sum + Math.max(1, numberOrZero(item.quantity) || 1), 0);
+  els.spoolMigrationPreview.innerHTML = `
+    <div class="form-hint warn">这是只读预览：当前 ${state.items.length} 条聚合库存会映射为 ${totalSpools} 个实体卷，不会改写 LocalStorage。</div>
+    ${renderBarRows(rows, "value", (row) => row.detail)}
+  `;
+}
+
+function getReferencedImageKeys() {
+  return [...new Set([
+    ...state.items.map((item) => item.imageKey),
+    ...state.trash.map((entry) => entry.item?.imageKey)
+  ].filter(Boolean))];
+}
+
+function analyticsMetric(label, value, detail) {
+  return `
+    <article class="analytics-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+  `;
+}
+
+function groupItemsBy(field) {
+  const map = new Map();
+  state.items.forEach((item) => {
+    const label = cleanText(item[field]) || "未填写";
+    const current = map.get(label) || { label, count: 0, quantity: 0, remaining: 0 };
+    current.count += 1;
+    current.quantity += numberOrZero(item.quantity);
+    current.remaining += numberOrZero(item.remainingWeight);
+    map.set(label, current);
+  });
+  return [...map.values()].sort((a, b) => b.remaining - a.remaining || b.count - a.count);
+}
+
+function renderBarRows(rows, valueKey, detailFormatter) {
+  if (!rows.length) return `<p class="muted">暂无数据。</p>`;
+  const max = Math.max(1, ...rows.map((row) => numberOrZero(row[valueKey])));
+  return rows.map((row) => {
+    const value = numberOrZero(row[valueKey]);
+    const pct = Math.max(4, Math.round((value / max) * 100));
+    return `
+      <div class="bar-row">
+        <div class="bar-row-head">
+          <strong>${escapeHtml(row.label)}</strong>
+          <span>${escapeHtml(detailFormatter(row))}</span>
+        </div>
+        <span class="bar-track"><span class="bar-fill" style="--pct:${pct}%"></span></span>
+      </div>
+    `;
+  }).join("");
+}
+
+function getRecordsWithinDays(days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return state.consumption.filter((record) => activityTime(record.date) >= cutoff);
+}
+
+function sumRecordsGrams(records) {
+  return records.reduce((sum, record) => sum + numberOrZero(record.grams), 0);
+}
+
+function sumRecordCost(records) {
+  return records.reduce((sum, record) => sum + numberOrZero(record.cost?.total), 0);
+}
+
+function formatWeightCell(value) {
+  const number = parseNumber(value);
+  return Number.isFinite(number) ? `${formatNumber(number)} g` : "-";
+}
+
+function formatChangeWeight(record) {
+  const change = parseNumber(record.changeWeight);
+  if (Number.isFinite(change)) {
+    const sign = change > 0 ? "+" : "";
+    const cls = change < 0 ? "danger-text" : change > 0 ? "good-text" : "muted";
+    return `<span class="${cls}">${sign}${formatNumber(change)} g</span>`;
+  }
+  const type = record.type || inferConsumptionType(record);
+  const sign = ["打印消耗", "扫码消耗", "队列扣减", "失败损耗"].includes(type) ? "-" : "";
+  return `${sign}${formatNumber(record.grams)} g`;
+}
+
+function recordTypeTag(type) {
+  const cls = type === "失败损耗" ? "danger" :
+    ["盘点修正", "手动调整"].includes(type) ? "warn" :
+    ["位置变更", "开封", "干燥记录"].includes(type) ? "info" : "";
+  return `<span class="tag ${cls}">${escapeHtml(type || "打印消耗")}</span>`;
+}
+
+function inferConsumptionType(record) {
+  if (record.type) return record.type;
+  if (record.difference !== "" && record.difference !== undefined) return "盘点修正";
+  if (/扫码/.test(record.notes || record.project || "")) return "扫码消耗";
+  if (/队列/.test(record.notes || "")) return "队列扣减";
+  return "打印消耗";
 }
 
 function renderCostInputs() {
@@ -475,17 +921,21 @@ function renderQueueTable() {
   els.queueBody.innerHTML = rows.map((task) => {
     const risk = queueRisk(task);
     const cost = calculateQueueCost(task);
+    const device = getDevice(task.deviceId);
+    const schedule = renderQueueSchedule(task, device);
+    const priorityTag = `<span class="tag ${task.priority === "紧急" ? "danger" : task.priority === "高" ? "warn" : "info"}">${escapeHtml(task.priority || "普通")}</span>`;
     const rowClass = risk.level === "danger" ? "queue-risk" : ["打印中", "准备中"].includes(task.status) ? "active-print" : task.status === "失败" ? "cost-risk" : "";
     const totalGrams = getQueueMaterials(task).reduce((sum, material) => sum + getMaterialPlannedWeight(material), 0);
     const actualGrams = getQueueMaterials(task).reduce((sum, material) => sum + getMaterialActualWeight(material), 0);
     const variance = task.status === "已完成" ? actualGrams - totalGrams : 0;
     return `
       <tr class="${rowClass}">
-        <td><strong>${escapeHtml(task.name || "-")}</strong><div class="muted">${escapeHtml(task.notes || "")}</div>${task.failureReason ? `<div class="tag danger">失败：${escapeHtml(task.failureReason)}</div>` : ""}</td>
+        <td><strong>${escapeHtml(task.name || "-")}</strong><div class="muted">${priorityTag} ${escapeHtml(task.notes || "")}</div>${task.failureReason ? `<div class="tag danger">失败：${escapeHtml(task.failureReason)}</div>` : ""}</td>
         <td>${renderQueueMaterialsSummary(task)}</td>
         <td>${formatNumber(totalGrams)} g${task.status === "已完成" ? `<div class="muted">实际 ${formatNumber(actualGrams)} g，偏差 ${formatNumber(variance)} g</div>` : ""}</td>
         <td>${formatNumber(task.hours)} h</td>
-        <td>￥${formatMoney(cost.total)}</td>
+        <td>${schedule}</td>
+        <td>￥${formatMoney(cost.total)}${task.status === "已完成" && task.completedCostSummary ? `<div class="muted">已完成摘要 ￥${formatMoney(task.completedCostSummary.total)}</div>` : ""}</td>
         <td>${statusTag(task.status)}</td>
         <td><span class="tag ${risk.level}">${escapeHtml(risk.message)}</span></td>
         <td>
@@ -493,6 +943,7 @@ function renderQueueTable() {
             <button class="small-button" type="button" data-edit-queue="${task.id}">编辑</button>
             <button class="small-button" type="button" data-complete-queue="${task.id}" ${task.status === "已完成" ? "disabled" : ""}>完成</button>
             <button class="small-button danger" type="button" data-fail-queue="${task.id}" ${task.status === "已完成" || task.status === "失败" ? "disabled" : ""}>失败</button>
+            ${task.status === "失败" ? `<button class="small-button" type="button" data-requeue="${task.id}">重新排队</button>` : ""}
             <button class="small-button danger" type="button" data-delete-queue="${task.id}">删除</button>
           </div>
         </td>
@@ -511,6 +962,112 @@ function renderQueueTable() {
   els.queueBody.querySelectorAll("[data-delete-queue]").forEach((button) => {
     button.addEventListener("click", () => deleteQueueTask(button.dataset.deleteQueue));
   });
+  els.queueBody.querySelectorAll("[data-requeue]").forEach((button) => {
+    button.addEventListener("click", () => requeueTask(button.dataset.requeue));
+  });
+}
+
+function renderQueueSchedule(task, device) {
+  const lines = [
+    device ? `设备：${device.name}` : "设备：未指定",
+    task.plannedStart ? `开始：${formatDateTime(task.plannedStart)}` : "",
+    task.plannedEnd ? `完成：${formatDateTime(task.plannedEnd)}` : ""
+  ].filter(Boolean);
+  return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("") || "-";
+}
+
+function renderDevices() {
+  renderDeviceOptions();
+  els.devicesBody.innerHTML = state.devices.length ? state.devices.map((device) => {
+    const related = state.queue.filter((task) => task.deviceId === device.id && !["已完成", "失败", "取消"].includes(task.status)).length;
+    return `
+      <tr class="${device.status === "打印中" ? "active-print" : device.status === "维护中" ? "dry-risk" : device.status === "停用" ? "cost-risk" : ""}">
+        <td><strong>${escapeHtml(device.name || "-")}</strong><div class="muted">${escapeHtml(device.model || "-")}</div></td>
+        <td>${formatNumber(device.nozzle)} mm</td>
+        <td>${escapeHtml(device.materials || "-")}</td>
+        <td>${statusTag(device.status)}</td>
+        <td>${escapeHtml(device.location || "-")}</td>
+        <td>${related} 个进行中任务</td>
+        <td>${escapeHtml(device.notes || "-")}</td>
+        <td>
+          <div class="row-actions">
+            <button class="small-button" type="button" data-edit-device="${device.id}">编辑</button>
+            <button class="small-button danger" type="button" data-delete-device="${device.id}">删除</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") : `<tr><td colspan="8" class="muted">还没有设备记录。</td></tr>`;
+  els.devicesBody.querySelectorAll("[data-edit-device]").forEach((button) => {
+    button.addEventListener("click", () => fillDeviceForm(getDevice(button.dataset.editDevice)));
+  });
+  els.devicesBody.querySelectorAll("[data-delete-device]").forEach((button) => {
+    button.addEventListener("click", () => deleteDevice(button.dataset.deleteDevice));
+  });
+}
+
+function renderDeviceOptions() {
+  if (!els.queueDeviceInput) return;
+  const current = els.queueDeviceInput.value;
+  els.queueDeviceInput.innerHTML = `<option value="">未指定设备</option>` + state.devices
+    .map((device) => `<option value="${escapeAttribute(device.id)}">${escapeHtml(device.name)}${device.status ? `（${escapeHtml(device.status)}）` : ""}</option>`)
+    .join("");
+  if (state.devices.some((device) => device.id === current)) els.queueDeviceInput.value = current;
+}
+
+function saveDeviceFromForm(event) {
+  event.preventDefault();
+  const existingId = els.deviceId.value;
+  const device = normalizeDevice({
+    id: existingId || createId(),
+    name: els.deviceNameInput.value,
+    model: els.deviceModelInput.value,
+    nozzle: els.deviceNozzleInput.value,
+    materials: els.deviceMaterialsInput.value,
+    status: els.deviceStatusInput.value,
+    location: els.deviceLocationInput.value,
+    notes: els.deviceNotesInput.value,
+    createdAt: getDevice(existingId)?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  const exists = state.devices.some((entry) => entry.id === device.id);
+  state.devices = exists ? state.devices.map((entry) => entry.id === device.id ? device : entry) : [device, ...state.devices];
+  persistAll();
+  resetDeviceForm();
+  render();
+  showToast("设备已保存。");
+}
+
+function fillDeviceForm(device) {
+  if (!device) return;
+  els.deviceId.value = device.id;
+  els.deviceNameInput.value = device.name || "";
+  els.deviceModelInput.value = device.model || "";
+  els.deviceNozzleInput.value = device.nozzle || 0.4;
+  els.deviceMaterialsInput.value = device.materials || "";
+  els.deviceStatusInput.value = device.status || "可用";
+  els.deviceLocationInput.value = device.location || "";
+  els.deviceNotesInput.value = device.notes || "";
+  switchTab("devices");
+}
+
+function resetDeviceForm() {
+  els.deviceForm.reset();
+  els.deviceId.value = "";
+  els.deviceNozzleInput.value = 0.4;
+  els.deviceStatusInput.value = "可用";
+}
+
+function deleteDevice(id) {
+  const device = getDevice(id);
+  if (!device) return;
+  const related = state.queue.some((task) => task.deviceId === id && !["已完成", "失败", "取消"].includes(task.status));
+  if (related && !window.confirm("这个设备仍有关联的进行中任务，确认删除设备记录吗？任务会保留但设备显示为未指定。")) return;
+  if (!related && !window.confirm(`确认删除设备「${device.name}」吗？`)) return;
+  state.devices = state.devices.filter((entry) => entry.id !== id);
+  state.queue.forEach((task) => { if (task.deviceId === id) task.deviceId = ""; });
+  persistAll();
+  render();
 }
 
 function updateFilter(key, value) {
@@ -601,6 +1158,10 @@ async function saveItemFromForm(event) {
   const existingId = els.itemId.value;
   const itemId = existingId || createId();
   const existing = getItem(existingId);
+  const previousRemaining = existing ? numberOrZero(existing.remainingWeight) : 0;
+  const previousLocation = existing?.location || "";
+  const previousOpened = existing?.opened;
+  const previousDryKey = existing ? [existing.lastDryAt, existing.dryTemp, existing.dryHours, existing.dryStatus, existing.moistureSuspected].join("|") : "";
   const now = new Date().toISOString();
   const imageKey = await resolveItemImageKey(existing, itemId);
   const item = normalizeItem({
@@ -635,9 +1196,76 @@ async function saveItemFromForm(event) {
   });
   upsertItem(item);
   ensureFilamentCodes();
+  recordItemFormLedger(existing, item, previousRemaining, previousLocation, previousOpened, previousDryKey);
   persistAll();
   els.itemDialog.close();
   render();
+}
+
+function recordItemFormLedger(existing, item, previousRemaining, previousLocation, previousOpened, previousDryKey) {
+  const currentRemaining = numberOrZero(item.remainingWeight);
+  if (!existing) {
+    addLedgerRecord({
+      type: "入库",
+      project: "新增耗材",
+      item,
+      beforeWeight: 0,
+      afterWeight: currentRemaining,
+      changeWeight: currentRemaining,
+      grams: currentRemaining,
+      notes: item.notes
+    });
+    return;
+  }
+  if (currentRemaining !== previousRemaining) {
+    addLedgerRecord({
+      type: "手动调整",
+      project: "编辑耗材",
+      item,
+      beforeWeight: previousRemaining,
+      afterWeight: currentRemaining,
+      changeWeight: currentRemaining - previousRemaining,
+      grams: Math.abs(currentRemaining - previousRemaining),
+      notes: "编辑库存剩余重量"
+    });
+  }
+  if (item.location !== previousLocation) {
+    addLedgerRecord({
+      type: "位置变更",
+      project: "更新位置",
+      item,
+      beforeWeight: currentRemaining,
+      afterWeight: currentRemaining,
+      changeWeight: 0,
+      grams: 0,
+      notes: `${previousLocation || "-"} -> ${item.location || "-"}`
+    });
+  }
+  if (item.opened !== previousOpened && item.opened === true) {
+    addLedgerRecord({
+      type: "开封",
+      project: "标记开封",
+      item,
+      beforeWeight: currentRemaining,
+      afterWeight: currentRemaining,
+      changeWeight: 0,
+      grams: 0,
+      notes: item.openedAt ? `开封日期：${item.openedAt}` : ""
+    });
+  }
+  const currentDryKey = [item.lastDryAt, item.dryTemp, item.dryHours, item.dryStatus, item.moistureSuspected].join("|");
+  if (currentDryKey !== previousDryKey && (item.lastDryAt || item.dryStatus === "已干燥")) {
+    addLedgerRecord({
+      type: "干燥记录",
+      project: "干燥管理",
+      item,
+      beforeWeight: currentRemaining,
+      afterWeight: currentRemaining,
+      changeWeight: 0,
+      grams: 0,
+      notes: `温度 ${item.dryTemp || "-"}°C，时长 ${item.dryHours || "-"}h，状态 ${item.dryStatus || "-"}`
+    });
+  }
 }
 
 function previewSelectedItemImage() {
@@ -847,6 +1475,7 @@ function saveConsumptionFromForm(event) {
   if (!item) return window.alert("请选择耗材。");
   if (grams > numberOrZero(item.remainingWeight) && !window.confirm("消耗超过当前剩余库存，仍然记录吗？")) return;
   addConsumption({
+    type: "打印消耗",
     project: els.consumeProjectInput.value,
     itemId: item.id,
     grams,
@@ -861,24 +1490,57 @@ function addConsumption(input, deductStock) {
   const item = getItem(input.itemId);
   const grams = numberOrZero(input.grams);
   const hours = numberOrZero(input.hours);
+  const beforeWeight = Number.isFinite(parseNumber(input.beforeWeight)) ? parseNumber(input.beforeWeight) : (item ? numberOrZero(item.remainingWeight) : "");
+  const afterWeight = Number.isFinite(parseNumber(input.afterWeight))
+    ? parseNumber(input.afterWeight)
+    : (deductStock && item ? Math.max(0, numberOrZero(item.remainingWeight) - grams) : beforeWeight);
+  const changeWeight = Number.isFinite(parseNumber(input.changeWeight))
+    ? parseNumber(input.changeWeight)
+    : (Number.isFinite(parseNumber(beforeWeight)) && Number.isFinite(parseNumber(afterWeight)) ? afterWeight - beforeWeight : "");
   const record = normalizeConsumption({
     id: createId(),
     date: new Date().toISOString().slice(0, 10),
+    type: input.type || "打印消耗",
     project: input.project,
     itemId: input.itemId,
     itemLabel: item ? itemLabel(item) : "",
     grams,
     hours,
     cost: calculatePrintCost(item, grams, hours),
+    beforeWeight,
+    afterWeight,
+    changeWeight,
+    relatedTaskId: input.relatedTaskId || "",
     notes: input.notes
   });
   state.consumption.unshift(record);
   if (deductStock && item) {
-    item.remainingWeight = Math.max(0, numberOrZero(item.remainingWeight) - grams);
+    item.remainingWeight = afterWeight;
     item.status = item.remainingWeight <= 0 ? "已用完" : item.status;
     item.updatedAt = new Date().toISOString();
   }
   persistAll();
+}
+
+function addLedgerRecord(input) {
+  const item = input.item || getItem(input.itemId);
+  const grams = Number.isFinite(parseNumber(input.grams)) ? parseNumber(input.grams) : Math.abs(numberOrZero(input.changeWeight));
+  state.consumption.unshift(normalizeConsumption({
+    id: createId(),
+    date: new Date().toISOString().slice(0, 10),
+    type: input.type,
+    project: input.project,
+    itemId: item?.id || input.itemId || "",
+    itemLabel: item ? itemLabel(item) : "",
+    grams,
+    hours: numberOrZero(input.hours),
+    cost: input.cost || null,
+    beforeWeight: input.beforeWeight,
+    afterWeight: input.afterWeight,
+    changeWeight: input.changeWeight,
+    relatedTaskId: input.relatedTaskId || "",
+    notes: input.notes
+  }));
 }
 
 function saveCostSettingsFromInputs() {
@@ -926,9 +1588,14 @@ function openQueueDialog(task = null) {
   els.queueDialogTitle.textContent = task ? "编辑队列任务" : "新增队列任务";
   els.queueForm.reset();
   renderSelects();
+  renderDeviceOptions();
   els.queueId.value = task?.id || "";
   els.queueNameInput.value = task?.name || "";
   els.queueHoursInput.value = task?.hours || "";
+  els.queuePriorityInput.value = task?.priority || "普通";
+  els.queueDeviceInput.value = task?.deviceId || "";
+  els.queueStartInput.value = toDateTimeLocal(task?.plannedStart);
+  els.queueEndInput.value = toDateTimeLocal(task?.plannedEnd);
   els.queueStatusInput.value = task?.status || "待打印";
   els.queueNotesInput.value = task?.notes || "";
   renderQueueMaterialRows(task ? getQueueMaterials(task) : [{ itemId: state.items[0]?.id || "", grams: "" }]);
@@ -947,9 +1614,14 @@ function saveQueueFromForm(event) {
     name: els.queueNameInput.value,
     materials,
     hours: els.queueHoursInput.value,
+    priority: els.queuePriorityInput.value,
+    deviceId: els.queueDeviceInput.value,
+    plannedStart: fromDateTimeLocal(els.queueStartInput.value),
+    plannedEnd: fromDateTimeLocal(els.queueEndInput.value),
     status: els.queueStatusInput.value,
     notes: els.queueNotesInput.value,
     completedConsumptionId: existing?.completedConsumptionId || "",
+    completedCostSummary: existing?.completedCostSummary || null,
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
@@ -988,15 +1660,18 @@ function completeQueueTask(id) {
   materials.forEach((material) => {
     const grams = getMaterialActualWeight(material);
     addConsumption({
+      type: "队列扣减",
       project: task.name,
       itemId: material.itemId,
       grams,
       hours: numberOrZero(task.hours) / materials.length,
+      relatedTaskId: task.id,
       notes: `来自打印队列：${task.notes || ""}`.trim()
     }, true);
   });
   task.status = "已完成";
   task.completedConsumptionId = state.consumption.slice(0, materials.length).map((record) => record.id).join(",");
+  task.completedCostSummary = calculateQueueCost(task);
   task.completedAt = new Date().toISOString();
   task.updatedAt = new Date().toISOString();
   persistAll();
@@ -1012,30 +1687,48 @@ function failQueueTask(id) {
   if (shouldRecord) {
     getQueueMaterials(task).forEach((material) => {
       addConsumption({
+        type: "失败损耗",
         project: `${task.name || "队列任务"}（失败）`,
         itemId: material.itemId,
         grams: getMaterialActualWeight(material),
         hours: numberOrZero(task.hours) / Math.max(1, getQueueMaterials(task).length),
+        relatedTaskId: task.id,
         notes: `失败原因：${reason}。${task.notes || ""}`.trim()
       }, true);
     });
   }
-  if (window.confirm("是否重新加入一个待打印任务？")) {
-    state.queue.unshift(normalizeQueue({
-      ...task,
-      id: createId(),
-      status: "待打印",
-      failureReason: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }));
-  }
+  if (window.confirm("是否重新加入一个待打印任务？")) requeueTask(task.id, false);
   task.status = "失败";
   task.failureReason = reason || "其他";
   task.failedAt = new Date().toISOString();
   task.updatedAt = new Date().toISOString();
   persistAll();
   render();
+}
+
+function requeueTask(id, shouldPersist = true) {
+  const task = state.queue.find((entry) => entry.id === id);
+  if (!task) return;
+  state.queue.unshift(normalizeQueue({
+    ...task,
+    id: createId(),
+    status: "待打印",
+    failureReason: "",
+    failureNotes: "",
+    failedAt: "",
+    completedAt: "",
+    completedConsumptionId: "",
+    completedCostSummary: null,
+    plannedStart: "",
+    plannedEnd: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }));
+  if (shouldPersist) {
+    persistAll();
+    render();
+    showToast("已重新加入待打印队列。");
+  }
 }
 
 function deleteQueueTask(id) {
@@ -1158,6 +1851,9 @@ function queueRisk(task) {
   if (task.status === "已完成") return { level: "", message: "已完成" };
   if (task.status === "失败") return { level: "danger", message: "失败" };
   if (["已取消", "取消"].includes(task.status)) return { level: "", message: "已取消" };
+  const device = getDevice(task.deviceId);
+  if (device?.status === "停用") return { level: "danger", message: "设备停用" };
+  if (device?.status === "维护中") return { level: "warn", message: "设备维护中" };
   if (materials.some((material) => getMaterialPlannedWeight(material) > numberOrZero(getItem(material.itemId).remainingWeight))) return { level: "danger", message: "库存不足" };
   if (materials.some((material) => numberOrZero(getItem(material.itemId).remainingWeight) - getMaterialPlannedWeight(material) <= 100)) return { level: "warn", message: "完成后低库存" };
   return { level: "", message: "库存充足" };
@@ -1354,7 +2050,7 @@ function scoreDuplicatePair(a, b) {
   const strongEvidence = collectStrongEvidence(candidate);
   const comparisons = buildDuplicateComparisons(candidate, weakEvidence, strongEvidence);
   const caps = collectConflictCaps(candidate, weakEvidence, strongEvidence);
-  const blockedReason = candidate.material.blockedReason || candidate.diameter.blockedReason || "";
+  const blockedReason = candidate.material.blockedReason || "";
   const rawScore = Math.min(100, Math.round([...weakEvidence, ...strongEvidence].reduce((sum, row) => sum + numberOrZero(row.points), 0)));
   const scoreInfo = applyDuplicateHardCaps(rawScore, caps, weakEvidence, strongEvidence);
   const reasons = [...weakEvidence, ...strongEvidence].filter((entry) => entry.points > 0).map((entry) => entry.label);
@@ -1395,7 +2091,7 @@ function buildDuplicateCandidatePair(a, b) {
 }
 
 function collectWeakEvidence(candidate) {
-  return [candidate.brand, candidate.material, candidate.diameter]
+  return [candidate.brand, candidate.material]
     .filter((row) => row.participates && row.points > 0)
     .map((row) => evidence("weak", row.field, `${row.field}${row.verdict}`, row.points, row.field));
 }
@@ -1554,11 +2250,8 @@ function compareDiameter(a, b) {
   const left = numberOrZero(a);
   const right = numberOrZero(b);
   const same = Math.abs(left - right) <= 0.01;
-  const row = comparison("线径", formatNumber(left), formatNumber(right), same ? "完全相同" : "不相同", same ? 15 : 0, 15, true);
-  if (!same) {
-    row.blockedReason = "线径不同";
-    row.conflictHint = "线径不同，不进入重复候选";
-  }
+  const row = comparison("线径", formatNumber(left), formatNumber(right), same ? "相同（不参与评分）" : "不同（不参与评分）", 0, 0, false);
+  row.conflictHint = "线径不参与重复检测";
   return row;
 }
 
@@ -1664,7 +2357,7 @@ function buildDuplicateExplanations(a, b, score, comparisons, capReasons = [], w
   const details = [
     material?.points ? `材料判断为${material.verdict}` : "材料不完全一致",
     color?.points ? `颜色判断为${color.verdict}` : "颜色不完全一致",
-    diameter?.points ? `线径同为 ${formatNumber(a.diameter)}mm` : "线径不同",
+    "线径仅作参考，不参与重复检测",
     brand?.points ? `品牌 ${brand.a} 和 ${brand.b} 被视为${brand.verdict}` : "品牌不同"
   ];
   const strongText = strongEvidence.length ? `强证据包括：${strongEvidence.map((entry) => entry.label).join("、")}。` : "没有足够独立强证据。";
@@ -1934,6 +2627,9 @@ function saveAudit() {
       grams: Math.abs(difference),
       systemWeight,
       actualWeight: actual,
+      beforeWeight: systemWeight,
+      afterWeight: actual,
+      changeWeight: difference,
       difference,
       notes
     }));
@@ -2051,6 +2747,7 @@ function quickConsumeScannedItem(item, grams) {
   if (!grams || grams <= 0) return window.alert("请输入有效扣减重量。");
   if (grams > numberOrZero(item.remainingWeight) && !window.confirm("扣减重量超过当前剩余，仍然继续吗？")) return;
   addConsumption({
+    type: "扫码消耗",
     project: "扫码快速消耗",
     itemId: item.id,
     grams,
@@ -2065,7 +2762,21 @@ function quickConsumeScannedItem(item, grams) {
 function updateScannedItemLocation() {
   const item = getScanActionItem();
   if (!item) return;
+  const previousLocation = item.location || "";
+  const weight = numberOrZero(item.remainingWeight);
   item.location = cleanText(els.scanLocationInput.value);
+  if (item.location !== previousLocation) {
+    addLedgerRecord({
+      type: "位置变更",
+      project: "扫码更新位置",
+      item,
+      beforeWeight: weight,
+      afterWeight: weight,
+      changeWeight: 0,
+      grams: 0,
+      notes: `${previousLocation || "-"} -> ${item.location || "-"}`
+    });
+  }
   item.updatedAt = new Date().toISOString();
   persistAll();
   render();
@@ -2076,9 +2787,23 @@ function updateScannedItemLocation() {
 function markScannedItemOpened() {
   const item = getScanActionItem();
   if (!item) return;
+  const wasOpened = item.opened === true;
+  const weight = numberOrZero(item.remainingWeight);
   item.opened = true;
   item.openedAt = item.openedAt || new Date().toISOString().slice(0, 10);
   item.status = item.status === "未开封" ? "在用" : item.status;
+  if (!wasOpened) {
+    addLedgerRecord({
+      type: "开封",
+      project: "扫码标记开封",
+      item,
+      beforeWeight: weight,
+      afterWeight: weight,
+      changeWeight: 0,
+      grams: 0,
+      notes: item.openedAt ? `开封日期：${item.openedAt}` : ""
+    });
+  }
   item.updatedAt = new Date().toISOString();
   persistAll();
   render();
@@ -2186,18 +2911,8 @@ function handleJsonInput(event) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result);
-      state.items = (Array.isArray(parsed) ? parsed : parsed.items || []).map(normalizeItem);
-      state.consumption = (parsed.consumption || []).map(normalizeConsumption);
-      state.queue = (parsed.queue || []).map(normalizeQueue);
-      state.costSettings = { ...costDefaults, ...(parsed.costSettings || {}) };
-      state.trash = (parsed.trash || []).map(normalizeTrashEntry);
-      state.duplicateIgnores = Array.isArray(parsed.duplicateIgnores) ? parsed.duplicateIgnores : [];
-      state.duplicateNegativeRules = Array.isArray(parsed.duplicateNegativeRules) ? parsed.duplicateNegativeRules : [];
-      state.qualityIgnores = Array.isArray(parsed.qualityIgnores) ? parsed.qualityIgnores : [];
-      state.labelSettings = { ...labelDefaults, ...(parsed.labelSettings || {}) };
-      ensureFilamentCodes();
-      persistAll();
-      render();
+      if (!confirmRestorePreview(parsed, "JSON", [])) return;
+      applyRestoredData(parsed);
       window.alert(`已恢复 ${state.items.length} 条耗材记录。图片仍需保留在当前浏览器 IndexedDB 中。`);
     } catch {
       window.alert("JSON 备份文件无法识别。");
@@ -2208,11 +2923,14 @@ function handleJsonInput(event) {
 
 function exportJson() {
   const payload = JSON.stringify({
-    version: 4,
+    version: DATA_VERSION,
+    appVersion: APP_VERSION,
+    schema: "aggregate-inventory",
     exportedAt: new Date().toISOString(),
     items: state.items,
     consumption: state.consumption,
     queue: state.queue,
+    devices: state.devices,
     costSettings: state.costSettings,
     trash: state.trash,
     duplicateIgnores: state.duplicateIgnores,
@@ -2251,11 +2969,14 @@ async function exportZipBackup() {
     zip.file(`images/${fileName}`, image.blob);
   }
   zip.file("data.json", JSON.stringify({
-    version: 4,
+    version: DATA_VERSION,
+    appVersion: APP_VERSION,
+    schema: "aggregate-inventory",
     exportedAt: new Date().toISOString(),
     items: state.items,
     consumption: state.consumption,
     queue: state.queue,
+    devices: state.devices,
     costSettings: state.costSettings,
     trash: state.trash,
     duplicateIgnores: state.duplicateIgnores,
@@ -2275,37 +2996,87 @@ async function handleZipInput(event) {
   event.target.value = "";
   if (!file) return;
   if (!window.JSZip) return window.alert("缺少 JSZip，无法恢复 ZIP 备份。");
-  if (!window.confirm("恢复 ZIP 会覆盖当前库存、消耗、队列、设置和回收站数据，确认继续吗？")) return;
   try {
     const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
     const dataFile = zip.file("data.json");
     if (!dataFile) throw new Error("missing data.json");
     const parsed = JSON.parse(await dataFile.async("text"));
     const manifest = parsed.imageManifest || {};
+    const missingInZip = Object.entries(manifest)
+      .filter(([, meta]) => !zip.file(meta.path))
+      .map(([imageKey]) => imageKey);
+    if (!confirmRestorePreview(parsed, "ZIP", missingInZip)) return;
     for (const [imageKey, meta] of Object.entries(manifest)) {
       const imageFile = zip.file(meta.path);
       if (!imageFile) continue;
       await putImage(imageKey, await imageFile.async("blob"), meta.mime || mimeFromPath(meta.path));
     }
-    state.items = (parsed.items || parsed.inventory || []).map(normalizeItem);
-    state.consumption = (parsed.consumption || parsed.consumptionRecords || []).map(normalizeConsumption);
-    state.queue = (parsed.queue || []).map(normalizeQueue);
-    state.costSettings = { ...costDefaults, ...(parsed.costSettings || {}) };
-    state.trash = (parsed.trash || []).map(normalizeTrashEntry);
-    state.duplicateIgnores = Array.isArray(parsed.duplicateIgnores) ? parsed.duplicateIgnores : [];
-    state.duplicateNegativeRules = Array.isArray(parsed.duplicateNegativeRules) ? parsed.duplicateNegativeRules : [];
-    state.qualityIgnores = Array.isArray(parsed.qualityIgnores) ? parsed.qualityIgnores : [];
-    state.restockSettings = { defaultThreshold: 200, ...(parsed.restockSettings || {}) };
-    state.labelSettings = { ...labelDefaults, ...(parsed.labelSettings || {}) };
-    ensureFilamentCodes();
-    persistAll();
+    applyRestoredData(parsed);
     await hydrateImages();
-    render();
     window.alert(`ZIP 恢复完成：${state.items.length} 条库存，${Object.keys(manifest).length} 张图片。`);
   } catch (error) {
     console.error(error);
     window.alert("ZIP 备份无法恢复，请确认文件包含 data.json 和 images/。");
   }
+}
+
+function confirmRestorePreview(parsed, type, missingImages = []) {
+  const stats = backupStats(parsed);
+  const current = {
+    items: state.items.length,
+    consumption: state.consumption.length,
+    queue: state.queue.length,
+    devices: state.devices.length,
+    trash: state.trash.length
+  };
+  const lines = [
+    `${type} 恢复预览`,
+    `备份版本：${stats.version || "未知"}${stats.appVersion ? ` / ${stats.appVersion}` : ""}`,
+    "",
+    "即将覆盖当前数据：",
+    `当前：库存 ${current.items}，流水 ${current.consumption}，队列 ${current.queue}，设备 ${current.devices}，回收站 ${current.trash}`,
+    `备份：库存 ${stats.items}，流水 ${stats.consumption}，队列 ${stats.queue}，设备 ${stats.devices}，回收站 ${stats.trash}`,
+    `图片引用：${stats.imageRefs}，ZIP 内缺失图片文件：${missingImages.length}`,
+    "",
+    "确认后会覆盖当前 LocalStorage 数据；建议已先导出完整 ZIP 备份。"
+  ];
+  return window.confirm(lines.join("\n"));
+}
+
+function backupStats(parsed) {
+  const items = Array.isArray(parsed) ? parsed : (parsed.items || parsed.inventory || []);
+  const trash = parsed.trash || [];
+  const imageRefs = [...new Set([
+    ...items.map((item) => item.imageKey),
+    ...trash.map((entry) => entry.item?.imageKey)
+  ].filter(Boolean))];
+  return {
+    version: parsed.version || (Array.isArray(parsed) ? "legacy-array" : ""),
+    appVersion: parsed.appVersion || "",
+    items: items.length,
+    consumption: (parsed.consumption || parsed.consumptionRecords || []).length,
+    queue: (parsed.queue || []).length,
+    devices: (parsed.devices || []).length,
+    trash: trash.length,
+    imageRefs: imageRefs.length
+  };
+}
+
+function applyRestoredData(parsed) {
+  state.items = (Array.isArray(parsed) ? parsed : parsed.items || parsed.inventory || []).map(normalizeItem);
+  state.consumption = (parsed.consumption || parsed.consumptionRecords || []).map(normalizeConsumption);
+  state.queue = (parsed.queue || []).map(normalizeQueue);
+  state.devices = (parsed.devices || []).map(normalizeDevice);
+  state.costSettings = { ...costDefaults, ...(parsed.costSettings || {}) };
+  state.trash = (parsed.trash || []).map(normalizeTrashEntry);
+  state.duplicateIgnores = Array.isArray(parsed.duplicateIgnores) ? parsed.duplicateIgnores : [];
+  state.duplicateNegativeRules = Array.isArray(parsed.duplicateNegativeRules) ? parsed.duplicateNegativeRules : [];
+  state.qualityIgnores = Array.isArray(parsed.qualityIgnores) ? parsed.qualityIgnores : [];
+  state.restockSettings = { defaultThreshold: 200, ...(parsed.restockSettings || {}) };
+  state.labelSettings = { ...labelDefaults, ...(parsed.labelSettings || {}) };
+  ensureFilamentCodes();
+  persistAll();
+  render();
 }
 
 async function hydrateImages() {
@@ -2398,6 +3169,10 @@ function normalizeItem(item) {
 }
 
 function normalizeConsumption(record) {
+  const type = cleanText(record.type) || inferConsumptionType(record);
+  const beforeWeight = parseNumber(record.beforeWeight ?? record.systemWeight);
+  const afterWeight = parseNumber(record.afterWeight ?? record.actualWeight);
+  const changeWeight = parseNumber(record.changeWeight ?? record.difference);
   return {
     id: record.id || createId(),
     date: normalizeDate(record.date) || new Date().toISOString().slice(0, 10),
@@ -2407,10 +3182,14 @@ function normalizeConsumption(record) {
     grams: parseNumber(record.grams) || 0,
     hours: parseNumber(record.hours) || 0,
     cost: record.cost || null,
-    type: cleanText(record.type),
+    type,
     systemWeight: parseNumber(record.systemWeight) || "",
     actualWeight: parseNumber(record.actualWeight) || "",
     difference: parseNumber(record.difference) || "",
+    beforeWeight: Number.isFinite(beforeWeight) ? beforeWeight : "",
+    afterWeight: Number.isFinite(afterWeight) ? afterWeight : "",
+    changeWeight: Number.isFinite(changeWeight) ? changeWeight : "",
+    relatedTaskId: cleanText(record.relatedTaskId),
     notes: cleanText(record.notes)
   };
 }
@@ -2431,15 +3210,36 @@ function normalizeQueue(task) {
       actualWeight: material.actualWeight === "" || material.actualWeight === undefined ? "" : (parseNumber(material.actualWeight) || 0)
     })).filter((material) => material.itemId && getMaterialPlannedWeight(material) > 0),
     hours: parseNumber(task.hours) || 0,
+    priority: queuePriorities.includes(cleanText(task.priority)) ? cleanText(task.priority) : "普通",
+    deviceId: cleanText(task.deviceId),
+    plannedStart: normalizeDateTime(task.plannedStart),
+    plannedEnd: normalizeDateTime(task.plannedEnd),
     status,
     notes: cleanText(task.notes),
     completedConsumptionId: cleanText(task.completedConsumptionId),
+    completedCostSummary: task.completedCostSummary || null,
     failureReason: cleanText(task.failureReason),
     failureNotes: cleanText(task.failureNotes),
     failedAt: task.failedAt || "",
     completedAt: task.completedAt || "",
     createdAt: task.createdAt || now,
     updatedAt: task.updatedAt || now
+  };
+}
+
+function normalizeDevice(device) {
+  const now = new Date().toISOString();
+  return {
+    id: device.id || createId(),
+    name: cleanText(device.name),
+    model: cleanText(device.model),
+    nozzle: parseNumber(device.nozzle) || 0.4,
+    materials: cleanText(device.materials),
+    status: ["可用", "打印中", "维护中", "停用"].includes(cleanText(device.status)) ? cleanText(device.status) : "可用",
+    location: cleanText(device.location),
+    notes: cleanText(device.notes),
+    createdAt: device.createdAt || now,
+    updatedAt: device.updatedAt || now
   };
 }
 
@@ -2457,6 +3257,7 @@ function persistAll() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
   localStorage.setItem(CONSUMPTION_KEY, JSON.stringify(state.consumption));
   localStorage.setItem(QUEUE_KEY, JSON.stringify(state.queue));
+  localStorage.setItem(DEVICES_KEY, JSON.stringify(state.devices));
   localStorage.setItem(COST_SETTINGS_KEY, JSON.stringify(state.costSettings));
   localStorage.setItem(TRASH_KEY, JSON.stringify(state.trash));
   localStorage.setItem(DUPLICATE_IGNORES_KEY, JSON.stringify(state.duplicateIgnores));
@@ -2490,6 +3291,10 @@ function loadObject(key, fallback) {
 
 function getItem(id) {
   return state.items.find((item) => item.id === id);
+}
+
+function getDevice(id) {
+  return state.devices.find((device) => device.id === id);
 }
 
 function ensureFilamentCodes() {
@@ -2696,6 +3501,32 @@ function normalizeDate(value) {
   }
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function normalizeDateTime(value) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const normalized = text.length === 16 ? `${text}:00` : text;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function toDateTimeLocal(value) {
+  const text = cleanText(value);
+  if (!text) return "";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromDateTimeLocal(value) {
+  return normalizeDateTime(value);
+}
+
+function formatDateTime(value) {
+  const local = toDateTimeLocal(value);
+  return local ? local.replace("T", " ") : "-";
 }
 
 function normalizeColor(value) {

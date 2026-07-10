@@ -22,17 +22,18 @@ Create or use test records that cover these pairs:
 
 | Case | Expected result |
 |---|---|
-| Same brand + same base material + same diameter only | Max 55; not 75+ |
+| Same brand + same base material only | Max 55; not 75+ |
 | Different color family, otherwise similar | Max 50 |
 | Same color family but different shade/effect, such as 湖蓝 vs 深蓝 | Max 70 |
 | PLA Basic vs PLA Matte or PLA Silk | Max 65 |
-| Same brand/material/diameter plus two independent strong evidence categories | May reach 75+ when no conflict cap blocks it |
+| Same brand/material plus two independent strong evidence categories | May reach 75+ when no conflict cap blocks it |
 | Same image/import source/color code with no conflicts | May reach 75+ with one uniqueness-heavy signal |
 | Remembered negative material/color combination | Hidden or downgraded by default in duplicate detection and inventory health |
 
 For the false-positive regression set, prepare at least 20 same-brand,
-same-base-material, same-diameter records with different colors or product
-lines. Expected: 0 weak-evidence-only pairs classify as 75+.
+same-base-material records with different colors or product lines. Expected:
+0 weak-evidence-only pairs classify as 75+. Changing diameter on those pairs
+must not change their duplicate score.
 
 ## Run Duplicate Detection
 
@@ -51,7 +52,7 @@ Expected:
 
 ## Validate Hard Caps
 
-1. Compare two records that only match brand, base material, and diameter.
+1. Compare two records that only match brand and base material.
 2. Compare two records with different color families.
 3. Compare two records such as `PETG-HF 湖蓝` and `PETG HF 深蓝`.
 4. Compare `PLA Basic` with `PLA Matte` or `PLA Silk`.
@@ -106,7 +107,8 @@ Expected:
 ## Implementation Validation Results
 
 - `node --check app.js`: PASS.
-- Weak-only duplicate case: PASS. Same brand/material/diameter with different color capped below 75.
+- Weak-only duplicate case: PASS. Same brand/material with different color capped below 75.
+- Diameter ignored case: PASS. Changing diameter from 1.75mm to 2.85mm does not change duplicate score and does not block the candidate; the comparison row shows “不同（不参与评分）”.
 - Color hard caps: PASS. `PETG-HF 湖蓝` vs `PETG HF 深蓝` scores 70 and stays “同类耗材，不建议合并”.
 - Strong evidence threshold: PASS. Exact color + product line + batch + name/notes identifiers can reach 90+.
 - Material modifier cap: PASS. `ABS` vs `ABS-GF` scores 60 and stays “同类耗材，不建议合并”.

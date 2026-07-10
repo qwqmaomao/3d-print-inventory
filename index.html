@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>3D 打印耗材库存 v1.7</title>
+    <title>3D 打印工作台 v2.1</title>
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Filament Desk v1.7</p>
-        <h1>3D 打印耗材库存</h1>
+        <p class="eyebrow">Filament Desk v2.1</p>
+        <h1>3D 打印工作台</h1>
       </div>
       <div class="header-actions">
         <label class="button secondary" for="xlsxInput">导入 WPS/Excel</label>
@@ -21,6 +21,7 @@
         <label class="button secondary" for="zipInput">恢复 ZIP</label>
         <input id="zipInput" type="file" accept=".zip,application/zip" hidden>
         <button id="exportZipBtn" class="button secondary" type="button">完整 ZIP 备份</button>
+        <button id="addRecordBtn" class="button secondary" type="button">添加记录</button>
         <button id="addItemBtn" class="button primary" type="button">新增耗材</button>
       </div>
     </header>
@@ -50,11 +51,16 @@
       </section>
 
       <nav class="tabs" aria-label="功能区">
-        <button class="tab active" type="button" data-tab="inventory">库存</button>
+        <button class="tab active" type="button" data-tab="dashboard">工作台</button>
+        <button class="tab" type="button" data-tab="inventory">库存</button>
         <button class="tab" type="button" data-tab="consumption">消耗记录</button>
         <button class="tab" type="button" data-tab="calculator">代打计算</button>
         <button class="tab" type="button" data-tab="queue">打印队列</button>
+        <button class="tab" type="button" data-tab="devices">设备管理</button>
         <button class="tab" type="button" data-tab="scan">扫码查找</button>
+        <button class="tab" type="button" data-tab="tools">实用工具</button>
+        <button class="tab" type="button" data-tab="analytics">统计分析</button>
+        <button class="tab" type="button" data-tab="safety">数据安全</button>
         <button class="tab" type="button" data-tab="restock">补货清单</button>
         <button class="tab" type="button" data-tab="duplicates">重复检测</button>
         <button class="tab" type="button" data-tab="quality">库存体检</button>
@@ -92,7 +98,63 @@
         </div>
       </section>
 
-      <section id="inventoryView" class="view active">
+      <section id="dashboardView" class="view active">
+        <section class="panel workbench-hero">
+          <div>
+            <p class="eyebrow">Workbench</p>
+            <h2>今天的耗材、任务和风险</h2>
+          </div>
+          <div class="quick-action-grid" aria-label="工作台快捷入口">
+            <button class="button primary" type="button" data-workbench-action="add-item">新增耗材</button>
+            <button class="button secondary" type="button" data-workbench-action="add-record">添加记录</button>
+            <button class="button secondary" type="button" data-workbench-action="scan">扫码查找</button>
+            <button class="button secondary" type="button" data-workbench-action="labels">打印标签</button>
+            <button class="button secondary" type="button" data-workbench-action="queue">进入排班</button>
+            <button class="button secondary" type="button" data-workbench-action="import">导入 Excel</button>
+            <button class="button secondary" type="button" data-workbench-action="backup">备份数据</button>
+          </div>
+        </section>
+
+        <section class="dashboard-grid" aria-label="工作台摘要">
+          <article class="dashboard-card">
+            <div class="dashboard-card-head">
+              <h2>低库存</h2>
+              <button class="small-button" type="button" data-workbench-action="restock">补货清单</button>
+            </div>
+            <ul id="dashboardLowStockList" class="dashboard-list"></ul>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-card-head">
+              <h2>待打印任务</h2>
+              <button class="small-button" type="button" data-workbench-action="queue">排班</button>
+            </div>
+            <ul id="dashboardQueueList" class="dashboard-list"></ul>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-card-head">
+              <h2>疑似受潮</h2>
+              <button class="small-button" type="button" data-workbench-action="quality">体检</button>
+            </div>
+            <ul id="dashboardDryList" class="dashboard-list"></ul>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-card-head">
+              <h2>需要盘点</h2>
+              <button class="small-button" type="button" data-workbench-action="audit">盘点</button>
+            </div>
+            <ul id="dashboardAuditList" class="dashboard-list"></ul>
+          </article>
+          <article class="dashboard-card wide">
+            <div class="dashboard-card-head">
+              <h2>最近动态</h2>
+              <button class="small-button" type="button" data-workbench-action="consumption">使用记录</button>
+            </div>
+            <ul id="dashboardActivityList" class="dashboard-list activity-list"></ul>
+          </article>
+        </section>
+      </section>
+
+      <section id="inventoryView" class="view">
         <section class="panel">
           <div class="filters">
             <label class="field search-field">
@@ -161,16 +223,19 @@
               <h2>消耗记录</h2>
               <p>记录每次打印实际用料，保存后会扣减对应库存。</p>
             </div>
-            <button id="addConsumptionBtn" class="button primary" type="button">新增消耗</button>
+            <button id="addConsumptionBtn" class="button primary" type="button">添加记录</button>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>日期</th>
-                  <th>项目</th>
+                  <th>类型</th>
+                  <th>项目 / 关联</th>
                   <th>耗材</th>
-                  <th>消耗</th>
+                  <th>变化</th>
+                  <th>变化前</th>
+                  <th>变化后</th>
                   <th>时长</th>
                   <th>成本</th>
                   <th>备注</th>
@@ -283,6 +348,7 @@
                   <th>耗材</th>
                   <th>预计消耗</th>
                   <th>预计时长</th>
+                  <th>设备 / 排班</th>
                   <th>预计成本</th>
                   <th>状态</th>
                   <th>提醒</th>
@@ -290,6 +356,65 @@
                 </tr>
               </thead>
               <tbody id="queueBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="devicesView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>设备管理</h2>
+              <p>轻量记录打印机设备，不接入真实打印机。</p>
+            </div>
+          </div>
+          <form id="deviceForm" class="device-form">
+            <input id="deviceId" type="hidden">
+            <label class="field">
+              <span>设备名称</span>
+              <input id="deviceNameInput" required placeholder="P1S / A1 mini">
+            </label>
+            <label class="field">
+              <span>型号</span>
+              <input id="deviceModelInput" placeholder="Bambu Lab P1S">
+            </label>
+            <label class="field">
+              <span>喷嘴直径 mm</span>
+              <input id="deviceNozzleInput" type="number" min="0" step="0.01" value="0.4">
+            </label>
+            <label class="field">
+              <span>支持材料</span>
+              <input id="deviceMaterialsInput" placeholder="PLA / PETG / TPU">
+            </label>
+            <label class="field">
+              <span>状态</span>
+              <select id="deviceStatusInput">
+                <option value="可用">可用</option>
+                <option value="打印中">打印中</option>
+                <option value="维护中">维护中</option>
+                <option value="停用">停用</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>位置</span>
+              <input id="deviceLocationInput" placeholder="工作室 / 机柜">
+            </label>
+            <label class="field full">
+              <span>备注</span>
+              <textarea id="deviceNotesInput" rows="2"></textarea>
+            </label>
+            <div class="panel-actions toolbar-row">
+              <button class="button primary" type="submit">保存设备</button>
+              <button id="resetDeviceFormBtn" class="button secondary" type="button">清空表单</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>设备</th><th>喷嘴</th><th>支持材料</th><th>状态</th><th>位置</th><th>关联任务</th><th>备注</th><th>操作</th></tr>
+              </thead>
+              <tbody id="devicesBody"></tbody>
             </table>
           </div>
         </section>
@@ -320,6 +445,154 @@
               <button id="scanManualBtn" class="button secondary" type="button">查找耗材</button>
             </div>
           </div>
+        </section>
+      </section>
+
+      <section id="toolsView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>实用工具中心</h2>
+              <p>报价、补货、标签、盘点、导入导出和数据安全入口。</p>
+            </div>
+          </div>
+          <div class="tool-grid">
+            <button class="tool-card" type="button" data-workbench-action="calculator">
+              <strong>报价计算器</strong>
+              <span>材料、电费、磨损、人工和利润</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="analytics">
+              <strong>统计分析</strong>
+              <span>库存结构、消耗趋势和成本概览</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="devices">
+              <strong>设备管理</strong>
+              <span>维护打印机、喷嘴、状态和位置</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="safety">
+              <strong>数据安全</strong>
+              <span>恢复预览、缺图检查和单卷迁移预览</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="restock">
+              <strong>补货清单</strong>
+              <span>低库存采购建议和 .xlsx 导出</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="labels">
+              <strong>二维码标签</strong>
+              <span>批量生成明文和二维码标签</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="audit">
+              <strong>库存盘点</strong>
+              <span>称重修正并生成记录</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="quality">
+              <strong>数据体检</strong>
+              <span>重复、缺图、异常库存和干燥提醒</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="scan">
+              <strong>扫码查找</strong>
+              <span>定位耗材并快速扣减</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="import">
+              <strong>Excel 导入</strong>
+              <span>WPS 表格和图片导入</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="backup">
+              <strong>完整备份</strong>
+              <span>导出包含图片的 ZIP</span>
+            </button>
+            <button class="tool-card" type="button" data-workbench-action="trash">
+              <strong>回收站</strong>
+              <span>恢复或永久删除耗材</span>
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <section id="analyticsView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>统计分析中心</h2>
+              <p>按库存结构、7/30/90 天消耗、项目成本和补货压力做轻量分析。</p>
+            </div>
+            <button class="button secondary" type="button" data-workbench-action="restock">查看补货清单</button>
+          </div>
+          <div id="analyticsMetricCards" class="analytics-metrics"></div>
+        </section>
+        <section class="analytics-grid">
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>库存结构</h2>
+                <p>按材料、品牌、状态和位置汇总。</p>
+              </div>
+            </div>
+            <div id="analyticsInventoryBreakdown" class="bar-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>消耗趋势</h2>
+                <p>最近 7 / 30 / 90 天用料和记录数。</p>
+              </div>
+            </div>
+            <div id="analyticsTrendBreakdown" class="bar-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>成本概览</h2>
+                <p>按记录估算项目成本和失败损耗。</p>
+              </div>
+            </div>
+            <div id="analyticsCostBreakdown" class="bar-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>补货预测</h2>
+                <p>结合当前余量和 30 天消耗速度。</p>
+              </div>
+            </div>
+            <div id="analyticsRestockForecast" class="bar-list"></div>
+          </article>
+        </section>
+      </section>
+
+      <section id="safetyView" class="view">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>数据安全中心</h2>
+              <p>先预览、再恢复；先规划、再迁移。</p>
+            </div>
+            <div class="panel-actions">
+              <button id="checkImagesBtn" class="button secondary" type="button">检查图片缺失</button>
+              <button id="previewSpoolMigrationBtn" class="button secondary" type="button">预览单卷迁移</button>
+            </div>
+          </div>
+          <div id="safetySummaryCards" class="analytics-metrics"></div>
+        </section>
+        <section class="analytics-grid">
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>图片缺失检查</h2>
+                <p>检查库存和回收站中的 imageKey 是否能在 IndexedDB 找到原图。</p>
+              </div>
+            </div>
+            <div id="imageCheckResult" class="bar-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>单卷迁移预览</h2>
+                <p>只预览 FIL-0001-01 这类实体卷编号，不改写当前库存数据。</p>
+              </div>
+            </div>
+            <div id="spoolMigrationPreview" class="bar-list"></div>
+          </article>
         </section>
       </section>
 
@@ -704,6 +977,27 @@
           <label class="field">
             <span>预计时长 小时</span>
             <input id="queueHoursInput" type="number" min="0" step="0.1">
+          </label>
+          <label class="field">
+            <span>优先级</span>
+            <select id="queuePriorityInput">
+              <option value="普通">普通</option>
+              <option value="低">低</option>
+              <option value="高">高</option>
+              <option value="紧急">紧急</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>关联设备</span>
+            <select id="queueDeviceInput"></select>
+          </label>
+          <label class="field">
+            <span>预计开始</span>
+            <input id="queueStartInput" type="datetime-local">
+          </label>
+          <label class="field">
+            <span>预计完成</span>
+            <input id="queueEndInput" type="datetime-local">
           </label>
           <label class="field">
             <span>状态</span>
